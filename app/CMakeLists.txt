@@ -57,5 +57,5 @@ target_link_libraries(MantraxApp
 
 # Enlazar con la biblioteca de Vulkan
 target_link_libraries(MantraxApp
-    "C:/Users/tupap/Desktop/MantraxFastRender/render/libs/vulkan-1.lib"
+    "${CMAKE_SOURCE_DIR}/../render/libs/vulkan-1.lib"
 )

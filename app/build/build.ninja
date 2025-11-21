@@ -39,7 +39,7 @@ include CMakeFiles/rules.ninja
 #############################################
 # Logical path to working directory; prefix for absolute paths.
 
-cmake_ninja_workdir = C$:/Users/tupap/Desktop/MantraxFastRender/app/build/
+cmake_ninja_workdir = C$:/Users/tupap/Desktop/MantraxVKRender/app/build/
 # =============================================================================
 # Object build statements for EXECUTABLE target MantraxApp
 
@@ -49,83 +49,83 @@ cmake_ninja_workdir = C$:/Users/tupap/Desktop/MantraxFastRender/app/build/
 
 build cmake_object_order_depends_target_MantraxApp: phony || .
 
-build CMakeFiles/MantraxApp.dir/main.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxFastRender/app/main.cpp || cmake_object_order_depends_target_MantraxApp
+build CMakeFiles/MantraxApp.dir/main.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/app/main.cpp || cmake_object_order_depends_target_MantraxApp
   CONFIG = Debug
   DEP_FILE = CMakeFiles\MantraxApp.dir\main.cpp.obj.d
   FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
-  INCLUDES = -IC:/Users/tupap/Desktop/MantraxFastRender/app -IC:/Users/tupap/Desktop/MantraxFastRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxFastRender/app/../add-ons/include
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/app -IC:/Users/tupap/Desktop/MantraxVKRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxVKRender/app/../add-ons/include
   OBJECT_DIR = CMakeFiles\MantraxApp.dir
   OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir
   TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
   TARGET_PDB = MantraxApp.pdb
 
-build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui.cpp || cmake_object_order_depends_target_MantraxApp
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui.cpp || cmake_object_order_depends_target_MantraxApp
   CONFIG = Debug
-  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui\imgui.cpp.obj.d
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui\imgui.cpp.obj.d
   FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
-  INCLUDES = -IC:/Users/tupap/Desktop/MantraxFastRender/app -IC:/Users/tupap/Desktop/MantraxFastRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxFastRender/app/../add-ons/include
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/app -IC:/Users/tupap/Desktop/MantraxVKRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxVKRender/app/../add-ons/include
   OBJECT_DIR = CMakeFiles\MantraxApp.dir
-  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui
   TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
   TARGET_PDB = MantraxApp.pdb
 
-build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_demo.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_demo.cpp || cmake_object_order_depends_target_MantraxApp
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_demo.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_demo.cpp || cmake_object_order_depends_target_MantraxApp
   CONFIG = Debug
-  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui\imgui_demo.cpp.obj.d
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui\imgui_demo.cpp.obj.d
   FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
-  INCLUDES = -IC:/Users/tupap/Desktop/MantraxFastRender/app -IC:/Users/tupap/Desktop/MantraxFastRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxFastRender/app/../add-ons/include
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/app -IC:/Users/tupap/Desktop/MantraxVKRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxVKRender/app/../add-ons/include
   OBJECT_DIR = CMakeFiles\MantraxApp.dir
-  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui
   TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
   TARGET_PDB = MantraxApp.pdb
 
-build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_draw.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_draw.cpp || cmake_object_order_depends_target_MantraxApp
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_draw.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_draw.cpp || cmake_object_order_depends_target_MantraxApp
   CONFIG = Debug
-  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui\imgui_draw.cpp.obj.d
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui\imgui_draw.cpp.obj.d
   FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
-  INCLUDES = -IC:/Users/tupap/Desktop/MantraxFastRender/app -IC:/Users/tupap/Desktop/MantraxFastRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxFastRender/app/../add-ons/include
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/app -IC:/Users/tupap/Desktop/MantraxVKRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxVKRender/app/../add-ons/include
   OBJECT_DIR = CMakeFiles\MantraxApp.dir
-  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui
   TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
   TARGET_PDB = MantraxApp.pdb
 
-build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_impl_vulkan.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_impl_vulkan.cpp || cmake_object_order_depends_target_MantraxApp
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_impl_vulkan.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_impl_vulkan.cpp || cmake_object_order_depends_target_MantraxApp
   CONFIG = Debug
-  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui\imgui_impl_vulkan.cpp.obj.d
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui\imgui_impl_vulkan.cpp.obj.d
   FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
-  INCLUDES = -IC:/Users/tupap/Desktop/MantraxFastRender/app -IC:/Users/tupap/Desktop/MantraxFastRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxFastRender/app/../add-ons/include
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/app -IC:/Users/tupap/Desktop/MantraxVKRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxVKRender/app/../add-ons/include
   OBJECT_DIR = CMakeFiles\MantraxApp.dir
-  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui
   TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
   TARGET_PDB = MantraxApp.pdb
 
-build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_impl_win32.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_impl_win32.cpp || cmake_object_order_depends_target_MantraxApp
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_impl_win32.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_impl_win32.cpp || cmake_object_order_depends_target_MantraxApp
   CONFIG = Debug
-  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui\imgui_impl_win32.cpp.obj.d
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui\imgui_impl_win32.cpp.obj.d
   FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
-  INCLUDES = -IC:/Users/tupap/Desktop/MantraxFastRender/app -IC:/Users/tupap/Desktop/MantraxFastRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxFastRender/app/../add-ons/include
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/app -IC:/Users/tupap/Desktop/MantraxVKRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxVKRender/app/../add-ons/include
   OBJECT_DIR = CMakeFiles\MantraxApp.dir
-  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui
   TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
   TARGET_PDB = MantraxApp.pdb
 
-build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_tables.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_tables.cpp || cmake_object_order_depends_target_MantraxApp
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_tables.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_tables.cpp || cmake_object_order_depends_target_MantraxApp
   CONFIG = Debug
-  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui\imgui_tables.cpp.obj.d
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui\imgui_tables.cpp.obj.d
   FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
-  INCLUDES = -IC:/Users/tupap/Desktop/MantraxFastRender/app -IC:/Users/tupap/Desktop/MantraxFastRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxFastRender/app/../add-ons/include
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/app -IC:/Users/tupap/Desktop/MantraxVKRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxVKRender/app/../add-ons/include
   OBJECT_DIR = CMakeFiles\MantraxApp.dir
-  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui
   TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
   TARGET_PDB = MantraxApp.pdb
 
-build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_widgets.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_widgets.cpp || cmake_object_order_depends_target_MantraxApp
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_widgets.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_widgets.cpp || cmake_object_order_depends_target_MantraxApp
   CONFIG = Debug
-  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui\imgui_widgets.cpp.obj.d
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui\imgui_widgets.cpp.obj.d
   FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
-  INCLUDES = -IC:/Users/tupap/Desktop/MantraxFastRender/app -IC:/Users/tupap/Desktop/MantraxFastRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxFastRender/app/../add-ons/include
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/app -IC:/Users/tupap/Desktop/MantraxVKRender/app/../render/include -IC:/Users/tupap/Desktop/MantraxVKRender/app/../add-ons/include
   OBJECT_DIR = CMakeFiles\MantraxApp.dir
-  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxFastRender\add-ons\include\imgui
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\add-ons\include\imgui
   TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
   TARGET_PDB = MantraxApp.pdb
 
@@ -137,11 +137,11 @@ build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons
 #############################################
 # Link the executable MantraxApp.exe
 
-build MantraxApp.exe: CXX_EXECUTABLE_LINKER__MantraxApp_Debug CMakeFiles/MantraxApp.dir/main.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_demo.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_draw.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_impl_vulkan.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_impl_win32.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_tables.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxFastRender/add-ons/include/imgui/imgui_widgets.cpp.obj | C$:/Users/tupap/Desktop/MantraxFastRender/app/../render/libs/vulkan-1.lib C$:/Users/tupap/Desktop/MantraxFastRender/render/libs/vulkan-1.lib
+build MantraxApp.exe: CXX_EXECUTABLE_LINKER__MantraxApp_Debug CMakeFiles/MantraxApp.dir/main.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_demo.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_draw.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_impl_vulkan.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_impl_win32.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_tables.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/add-ons/include/imgui/imgui_widgets.cpp.obj | C$:/Users/tupap/Desktop/MantraxVKRender/app/../render/libs/vulkan-1.lib C$:/Users/tupap/Desktop/MantraxVKRender/app/../render/libs/vulkan-1.lib
   CONFIG = Debug
   FLAGS = -O0 -g -Xclang -gcodeview -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
   LINK_FLAGS = -Xlinker /subsystem:windows -fuse-ld=lld-link
-  LINK_LIBRARIES = -ld3d12.lib  -ldxgi.lib  -ld3dcompiler.lib  -lkernel32.lib  -luser32.lib  -lgdi32.lib  -lwinspool.lib  -lshell32.lib  -lole32.lib  -loleaut32.lib  -luuid.lib  -lcomdlg32.lib  -ladvapi32.lib  C:/Users/tupap/Desktop/MantraxFastRender/app/../render/libs/vulkan-1.lib  C:/Users/tupap/Desktop/MantraxFastRender/render/libs/vulkan-1.lib  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 -loldnames
+  LINK_LIBRARIES = -ld3d12.lib  -ldxgi.lib  -ld3dcompiler.lib  -lkernel32.lib  -luser32.lib  -lgdi32.lib  -lwinspool.lib  -lshell32.lib  -lole32.lib  -loleaut32.lib  -luuid.lib  -lcomdlg32.lib  -ladvapi32.lib  C:/Users/tupap/Desktop/MantraxVKRender/app/../render/libs/vulkan-1.lib  C:/Users/tupap/Desktop/MantraxVKRender/app/../render/libs/vulkan-1.lib  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 -loldnames
   OBJECT_DIR = CMakeFiles\MantraxApp.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
@@ -155,7 +155,7 @@ build MantraxApp.exe: CXX_EXECUTABLE_LINKER__MantraxApp_Debug CMakeFiles/Mantrax
 # Utility command for edit_cache
 
 build CMakeFiles/edit_cache.util: CUSTOM_COMMAND
-  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\tupap\Desktop\MantraxFastRender\app\build && "C:\Program Files\CMake\bin\cmake-gui.exe" -SC:\Users\tupap\Desktop\MantraxFastRender\app -BC:\Users\tupap\Desktop\MantraxFastRender\app\build"
+  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\tupap\Desktop\MantraxVKRender\app\build && "C:\Program Files\CMake\bin\cmake-gui.exe" -SC:\Users\tupap\Desktop\MantraxVKRender\app -BC:\Users\tupap\Desktop\MantraxVKRender\app\build"
   DESC = Running CMake cache editor...
   pool = console
   restat = 1
@@ -167,7 +167,7 @@ build edit_cache: phony CMakeFiles/edit_cache.util
 # Utility command for rebuild_cache
 
 build CMakeFiles/rebuild_cache.util: CUSTOM_COMMAND
-  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\tupap\Desktop\MantraxFastRender\app\build && "C:\Program Files\CMake\bin\cmake.exe" --regenerate-during-build -SC:\Users\tupap\Desktop\MantraxFastRender\app -BC:\Users\tupap\Desktop\MantraxFastRender\app\build"
+  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\tupap\Desktop\MantraxVKRender\app\build && "C:\Program Files\CMake\bin\cmake.exe" --regenerate-during-build -SC:\Users\tupap\Desktop\MantraxVKRender\app -BC:\Users\tupap\Desktop\MantraxVKRender\app\build"
   DESC = Running CMake to regenerate build system...
   pool = console
   restat = 1
@@ -185,7 +185,7 @@ build MantraxApp: phony MantraxApp.exe
 # =============================================================================
 
 #############################################
-# Folder: C:/Users/tupap/Desktop/MantraxFastRender/app/build
+# Folder: C:/Users/tupap/Desktop/MantraxVKRender/app/build
 
 build all: phony MantraxApp.exe
 
@@ -196,14 +196,14 @@ build all: phony MantraxApp.exe
 #############################################
 # Re-run CMake if any of its inputs changed.
 
-build build.ninja C$:/Users/tupap/Desktop/MantraxFastRender/app/build/cmake_install.cmake: RERUN_CMAKE | C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCXXInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCommonLanguageInclude.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeGenericSystem.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeInitializeConfigs.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeLanguageInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeRCInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeSystemSpecificInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeSystemSpecificInitialize.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCXXLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/MSVC.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-MSVC.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Initialize.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/WindowsPaths.cmake C$:/Users/tupap/Desktop/MantraxFastRender/app/CMakeLists.txt CMakeCache.txt CMakeFiles/4.1.0/CMakeCCompiler.cmake CMakeFiles/4.1.0/CMakeCXXCompiler.cmake CMakeFiles/4.1.0/CMakeRCCompiler.cmake CMakeFiles/4.1.0/CMakeSystem.cmake
+build build.ninja C$:/Users/tupap/Desktop/MantraxVKRender/app/build/cmake_install.cmake: RERUN_CMAKE | C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCXXInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCommonLanguageInclude.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeGenericSystem.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeInitializeConfigs.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeLanguageInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeRCInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeSystemSpecificInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeSystemSpecificInitialize.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCXXLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/MSVC.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-MSVC.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Initialize.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/WindowsPaths.cmake C$:/Users/tupap/Desktop/MantraxVKRender/app/CMakeLists.txt CMakeCache.txt CMakeFiles/4.1.0/CMakeCCompiler.cmake CMakeFiles/4.1.0/CMakeCXXCompiler.cmake CMakeFiles/4.1.0/CMakeRCCompiler.cmake CMakeFiles/4.1.0/CMakeSystem.cmake
   pool = console
 
 
 #############################################
 # A missing CMake input file is not an error.
 
-build C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCXXInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCommonLanguageInclude.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeGenericSystem.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeInitializeConfigs.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeLanguageInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeRCInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeSystemSpecificInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeSystemSpecificInitialize.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCXXLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/MSVC.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-MSVC.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Initialize.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/WindowsPaths.cmake C$:/Users/tupap/Desktop/MantraxFastRender/app/CMakeLists.txt CMakeCache.txt CMakeFiles/4.1.0/CMakeCCompiler.cmake CMakeFiles/4.1.0/CMakeCXXCompiler.cmake CMakeFiles/4.1.0/CMakeRCCompiler.cmake CMakeFiles/4.1.0/CMakeSystem.cmake: phony
+build C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCXXInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeCommonLanguageInclude.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeGenericSystem.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeInitializeConfigs.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeLanguageInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeRCInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeSystemSpecificInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/CMakeSystemSpecificInitialize.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Compiler/Clang.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCXXLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Internal/CMakeCommonLinkerInformation.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/LLD.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Linker/MSVC.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-LLD.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Linker/Windows-MSVC.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang-C.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang-CXX.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Clang.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows-Initialize.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/Windows.cmake C$:/Program$ Files/CMake/share/cmake-4.1/Modules/Platform/WindowsPaths.cmake C$:/Users/tupap/Desktop/MantraxVKRender/app/CMakeLists.txt CMakeCache.txt CMakeFiles/4.1.0/CMakeCCompiler.cmake CMakeFiles/4.1.0/CMakeCXXCompiler.cmake CMakeFiles/4.1.0/CMakeRCCompiler.cmake CMakeFiles/4.1.0/CMakeSystem.cmake: phony
 
 
 #############################################

@@ -1,108 +1,85 @@
 #include "../render/include/MainWinPlug.h"
 #include "../render/include/MantraxGFX_API.h"
-#include <cmath>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 
 // ============================================================================
-// HELPERS MATEMÁTICOS BÁSICOS
+// CREAR GEOMETRÍA DE CUBO
 // ============================================================================
 
-void MatrixIdentity(float *mat)
+void CreateCube(std::vector<Mantrax::Vertex> &vertices, std::vector<uint32_t> &indices)
 {
-    for (int i = 0; i < 16; i++)
-        mat[i] = 0.0f;
-    mat[0] = mat[5] = mat[10] = mat[15] = 1.0f;
+    float s = 0.5f;
+
+    std::vector<Mantrax::Vertex> cubeVertices = {
+        // Cara frontal (Z+)
+        {{-s, -s, s}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+        {{s, -s, s}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+        {{s, s, s}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+        {{-s, s, s}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+
+        // Cara trasera (Z-)
+        {{s, -s, -s}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}},
+        {{-s, -s, -s}, {0.0f, 1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}},
+        {{-s, s, -s}, {1.0f, 0.5f, 0.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}},
+        {{s, s, -s}, {0.5f, 0.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}},
+
+        // Cara superior (Y+)
+        {{-s, s, s}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+        {{s, s, s}, {0.8f, 0.8f, 0.2f}, {1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+        {{s, s, -s}, {0.2f, 0.8f, 0.8f}, {1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
+        {{-s, s, -s}, {0.8f, 0.2f, 0.8f}, {0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
+
+        // Cara inferior (Y-)
+        {{-s, -s, -s}, {0.5f, 0.5f, 0.5f}, {0.0f, 0.0f}, {0.0f, -1.0f, 0.0f}},
+        {{s, -s, -s}, {0.3f, 0.3f, 0.7f}, {1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}},
+        {{s, -s, s}, {0.7f, 0.3f, 0.3f}, {1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}},
+        {{-s, -s, s}, {0.3f, 0.7f, 0.3f}, {0.0f, 1.0f}, {0.0f, -1.0f, 0.0f}},
+
+        // Cara derecha (X+)
+        {{s, -s, s}, {1.0f, 0.5f, 0.5f}, {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        {{s, -s, -s}, {0.5f, 1.0f, 0.5f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        {{s, s, -s}, {0.5f, 0.5f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
+        {{s, s, s}, {1.0f, 1.0f, 0.5f}, {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
+
+        // Cara izquierda (X-)
+        {{-s, -s, -s}, {0.5f, 1.0f, 1.0f}, {0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}},
+        {{-s, -s, s}, {1.0f, 0.5f, 1.0f}, {1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}},
+        {{-s, s, s}, {1.0f, 1.0f, 0.5f}, {1.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}},
+        {{-s, s, -s}, {0.5f, 1.0f, 0.5f}, {0.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}},
+    };
+
+    std::vector<uint32_t> cubeIndices = {
+        0, 1, 2, 2, 3, 0,       // Frontal
+        4, 5, 6, 6, 7, 4,       // Trasera
+        8, 9, 10, 10, 11, 8,    // Superior
+        12, 13, 14, 14, 15, 12, // Inferior
+        16, 17, 18, 18, 19, 16, // Derecha
+        20, 21, 22, 22, 23, 20  // Izquierda
+    };
+
+    vertices = cubeVertices;
+    indices = cubeIndices;
 }
 
-void MatrixPerspective(float *mat, float fov, float aspect, float znear, float zfar)
+// Helper para copiar glm::mat4 a float array
+void CopyMat4(float *dest, const glm::mat4 &src)
 {
-    for (int i = 0; i < 16; ++i)
-        mat[i] = 0.0f;
-
-    float f = 1.0f / tanf(fov * 0.5f);
-    mat[0] = f / aspect;
-    mat[5] = -f;
-    mat[10] = zfar / (zfar - znear);
-    mat[11] = 1.0f;
-    mat[14] = -(zfar * znear) / (zfar - znear);
+    memcpy(dest, glm::value_ptr(src), 16 * sizeof(float));
 }
 
-void MatrixOrthographic(float *mat, float left, float right, float bottom, float top, float znear, float zfar)
-{
-    for (int i = 0; i < 16; ++i)
-        mat[i] = 0.0f;
-
-    mat[0] = 2.0f / (right - left);
-    mat[5] = -2.0f / (top - bottom);
-    mat[10] = 1.0f / (zfar - znear);
-    mat[12] = -(right + left) / (right - left);
-    mat[13] = -(top + bottom) / (top - bottom);
-    mat[14] = -znear / (zfar - znear);
-    mat[15] = 1.0f;
-}
-
-void MatrixLookAt(float *mat, float eyeX, float eyeY, float eyeZ,
-                  float centerX, float centerY, float centerZ,
-                  float upX, float upY, float upZ)
-{
-    float fx = centerX - eyeX;
-    float fy = centerY - eyeY;
-    float fz = centerZ - eyeZ;
-    float len = sqrtf(fx * fx + fy * fy + fz * fz);
-    if (len > 0.0001f)
-    {
-        fx /= len;
-        fy /= len;
-        fz /= len;
-    }
-
-    float sx = fy * upZ - fz * upY;
-    float sy = fz * upX - fx * upZ;
-    float sz = fx * upY - fy * upX;
-    len = sqrtf(sx * sx + sy * sy + sz * sz);
-    if (len > 0.0001f)
-    {
-        sx /= len;
-        sy /= len;
-        sz /= len;
-    }
-
-    float ux = sy * fz - sz * fy;
-    float uy = sz * fx - sx * fz;
-    float uz = sx * fy - sy * fx;
-
-    for (int i = 0; i < 16; i++)
-        mat[i] = 0.0f;
-
-    mat[0] = sx;
-    mat[1] = ux;
-    mat[2] = -fx;
-    mat[3] = 0.0f;
-
-    mat[4] = sy;
-    mat[5] = uy;
-    mat[6] = -fy;
-    mat[7] = 0.0f;
-
-    mat[8] = sz;
-    mat[9] = uz;
-    mat[10] = -fz;
-    mat[11] = 0.0f;
-
-    mat[12] = -(sx * eyeX + sy * eyeY + sz * eyeZ);
-    mat[13] = -(ux * eyeX + uy * eyeY + uz * eyeZ);
-    mat[14] = (fx * eyeX + fy * eyeY + fz * eyeZ);
-    mat[15] = 1.0f;
-}
-
-void PrintMatrix(const char *name, const float *mat)
+// Helper para imprimir matrices GLM
+void PrintMatrix(const char *name, const glm::mat4 &mat)
 {
     std::cout << name << ":\n";
     for (int i = 0; i < 4; i++)
     {
+        std::cout << "  ";
         for (int j = 0; j < 4; j++)
         {
-            std::cout << mat[i * 4 + j] << " ";
+            printf("%8.3f ", mat[j][i]);
         }
         std::cout << "\n";
     }
@@ -110,13 +87,12 @@ void PrintMatrix(const char *name, const float *mat)
 }
 
 // ============================================================================
-// MAIN - MULTIPLATAFORMA
+// MAIN
 // ============================================================================
 
 #ifdef _WIN32
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int)
 {
-    // Crear consola para debug en Windows
     AllocConsole();
     FILE *dummy;
     freopen_s(&dummy, "CONOUT$", "w", stdout);
@@ -124,101 +100,95 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int)
 #else
 int main()
 {
-    void *hInst = nullptr; // En Linux no necesitamos HINSTANCE
+    void *hInst = nullptr;
 #endif
 
     try
     {
-        std::cout << "=== Mantrax Engine Test ===\n\n";
+        std::cout << "=== Mantrax Engine - Cubo Giratorio PBR ===\n\n";
 
-        // ==================================================
-        // 1. CREAR VENTANA USANDO WINDOWMAINPLUG
-        // ==================================================
         std::cout << "Creando ventana...\n";
         Mantrax::WindowConfig windowConfig;
         windowConfig.width = 1280;
         windowConfig.height = 720;
-        windowConfig.title = "Mantrax Engine - Modular Window Test";
+        windowConfig.title = "Mantrax Engine - Rotating Cube PBR";
         windowConfig.resizable = true;
 
         Mantrax::WindowMainPlug window(hInst, windowConfig);
-        std::cout << "Ventana creada correctamente\n";
+        std::cout << "Ventana creada\n\n";
 
-#ifdef _WIN32
-        std::cout << "  HWND: " << window.GetHWND() << "\n\n";
-#else
-        std::cout << "  Display: " << window.GetDisplay() << "\n";
-        std::cout << "  Window: " << window.GetWindow() << "\n\n";
-#endif
-
-        // ==================================================
-        // 2. INICIALIZAR GFX CON LA VENTANA
-        // ==================================================
         std::cout << "Inicializando GFX...\n";
         Mantrax::GFXConfig gfxConfig;
-        gfxConfig.clearColor = {0.1f, 0.2f, 0.3f, 1.0f};
+        gfxConfig.clearColor = {0.05f, 0.05f, 0.1f, 1.0f};
 
 #ifdef _WIN32
         Mantrax::GFX gfx(hInst, window.GetHWND(), gfxConfig);
 #else
         Mantrax::GFX gfx(window.GetDisplay(), window.GetWindow(), gfxConfig);
 #endif
-        std::cout << "GFX inicializado correctamente\n\n";
+        std::cout << "GFX inicializado\n\n";
 
-        // ==================================================
-        // 3. CREAR SHADER BÁSICO
-        // ==================================================
-        std::cout << "Creando shader...\n";
+        std::cout << "Creando shader PBR...\n";
         Mantrax::ShaderConfig shaderConfig;
-        shaderConfig.vertexShaderPath = "shaders/basic.vert.spv";
-        shaderConfig.fragmentShaderPath = "shaders/basic.frag.spv";
+        shaderConfig.vertexShaderPath = "shaders/pbr.vert.spv";
+        shaderConfig.fragmentShaderPath = "shaders/pbr.frag.spv";
         shaderConfig.vertexBinding = Mantrax::Vertex::GetBindingDescription();
         shaderConfig.vertexAttributes = Mantrax::Vertex::GetAttributeDescriptions();
-        shaderConfig.cullMode = VK_CULL_MODE_NONE;
-        shaderConfig.depthTestEnable = false;
+        shaderConfig.cullMode = VK_CULL_MODE_NONE; // Desactivado para debug
+        shaderConfig.depthTestEnable = false;      // Desactivado temporalmente
 
         auto shader = gfx.CreateShader(shaderConfig);
-        std::cout << "Shader creado\n\n";
+        std::cout << "Shader PBR creado\n\n";
 
-        // ==================================================
-        // 4. CREAR TRIÁNGULO
-        // ==================================================
-        std::cout << "Creando geometría...\n";
-        std::vector<Mantrax::Vertex> vertices = {
-            {{-0.5f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // Rojo
-            {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  // Verde
-            {{0.0f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.5f, 1.0f}, {0.0f, 0.0f, 1.0f}}  // Azul
-        };
-
-        std::vector<uint32_t> indices = {0, 1, 2};
+        std::cout << "Creando cubo...\n";
+        std::vector<Mantrax::Vertex> vertices;
+        std::vector<uint32_t> indices;
+        CreateCube(vertices, indices);
 
         auto mesh = gfx.CreateMesh(vertices, indices);
         auto material = gfx.CreateMaterial(shader);
-        std::cout << "Mesh y material creados\n\n";
+        std::cout << "Cubo creado con " << vertices.size() << " vértices y "
+                  << indices.size() << " índices\n\n";
 
-        // ==================================================
-        // 5. CONFIGURAR MATRICES MVP
-        // ==================================================
-        std::cout << "Configurando matrices MVP...\n";
+        std::cout << "Configurando cámara con GLM...\n";
         Mantrax::UniformBufferObject ubo{};
 
-        MatrixIdentity(ubo.model);
-        MatrixIdentity(ubo.view);
-        MatrixIdentity(ubo.projection);
+        // Usar GLM para las matrices
+        glm::mat4 model = glm::mat4(1.0f);
+        glm::mat4 view = glm::lookAt(
+            glm::vec3(0.0f, 0.0f, 3.0f), // Posición de la cámara
+            glm::vec3(0.0f, 0.0f, 0.0f), // Punto al que mira
+            glm::vec3(0.0f, 1.0f, 0.0f)  // Vector UP
+        );
+
+        float aspect = 1280.0f / 720.0f;
+        glm::mat4 projection = glm::perspective(
+            glm::radians(45.0f), // FOV
+            aspect,              // Aspect ratio
+            0.1f,                // Near plane
+            100.0f               // Far plane
+        );
+
+        // Corrección para Vulkan (invertir Y del clip space)
+        projection[1][1] *= -1;
+
+        // Copiar a UBO
+        CopyMat4(ubo.model, model);
+        CopyMat4(ubo.view, view);
+        CopyMat4(ubo.projection, projection);
+
+        // DEBUG: Imprimir matrices
+        PrintMatrix("Model (GLM)", model);
+        PrintMatrix("View (GLM)", view);
+        PrintMatrix("Projection (GLM)", projection);
 
         gfx.UpdateMaterialUBO(material.get(), ubo);
-        std::cout << "UBO actualizado\n\n";
+        std::cout << "UBO inicial actualizado\n\n";
 
-        // ==================================================
-        // 6. CREAR OBJETO DE RENDER
-        // ==================================================
         Mantrax::RenderObject obj(mesh, material);
         gfx.AddRenderObject(obj);
-        std::cout << "Objeto agregado a la escena\n\n";
 
-        // ==================================================
-        // 7. GAME LOOP PRINCIPAL
-        // ==================================================
+        std::cout << "Objeto añadido a la escena\n";
         std::cout << "Iniciando loop de renderizado...\n\n";
 
 #ifdef _WIN32
@@ -226,18 +196,19 @@ int main()
 #else
         auto lastTime = std::chrono::high_resolution_clock::now();
 #endif
+
+        float totalTime = 0.0f;
         bool running = true;
+        int frameCount = 0;
 
         while (running)
         {
-            // Procesar mensajes de ventana
             if (!window.ProcessMessages())
             {
                 running = false;
                 break;
             }
 
-            // Calcular deltaTime
 #ifdef _WIN32
             DWORD now = GetTickCount();
             float delta = (now - lastTime) / 1000.0f;
@@ -248,18 +219,47 @@ int main()
             lastTime = now;
 #endif
 
-            // Notificar a GFX si el framebuffer cambió de tamaño
-            if (window.WasFramebufferResized())
+            totalTime += delta;
+            frameCount++;
+
+            // DEBUG: Imprimir info cada 60 frames
+            if (frameCount % 60 == 0)
             {
-                gfx.NotifyFramebufferResized();
-                window.ResetFramebufferResizedFlag();
+                std::cout << "Frame " << frameCount << " - Time: " << totalTime << "s\n";
             }
 
-            // Dibujar el frame
+            // Rotar el cubo usando GLM
+            model = glm::rotate(glm::mat4(1.0f), totalTime * 0.8f, glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::rotate(model, totalTime * 0.5f, glm::vec3(1.0f, 0.0f, 0.0f));
+
+            CopyMat4(ubo.model, model);
+
+            // Actualizar aspecto si cambió el tamaño
+            if (window.WasFramebufferResized())
+            {
+                uint32_t w, h;
+                window.GetWindowSize(w, h);
+                float newAspect = (float)w / (float)h;
+
+                projection = glm::perspective(glm::radians(45.0f), newAspect, 0.1f, 100.0f);
+                projection[1][1] *= -1; // Corrección Vulkan
+
+                CopyMat4(ubo.projection, projection);
+
+                gfx.NotifyFramebufferResized();
+                window.ResetFramebufferResizedFlag();
+                std::cout << "Ventana redimensionada: " << w << "x" << h << "\n";
+            }
+
+            // Actualizar UBO cada frame
+            gfx.UpdateMaterialUBO(material.get(), ubo);
+
+            // Dibujar
             gfx.DrawFrame();
         }
 
-        std::cout << "\nCerrando aplicación...\n";
+        std::cout << "\nTotal de frames renderizados: " << frameCount << "\n";
+        std::cout << "Cerrando aplicación...\n";
     }
     catch (const std::exception &e)
     {

@@ -42,7 +42,7 @@ rule CUSTOM_COMMAND
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = "C:\Program Files\CMake\bin\cmake.exe" --regenerate-during-build -SC:\Users\tupap\Desktop\MantraxFastRender\app -BC:\Users\tupap\Desktop\MantraxFastRender\app\build
+  command = "C:\Program Files\CMake\bin\cmake.exe" --regenerate-during-build -SC:\Users\tupap\Desktop\MantraxVKRender\app -BC:\Users\tupap\Desktop\MantraxVKRender\app\build
   description = Re-running CMake...
   generator = 1
 
