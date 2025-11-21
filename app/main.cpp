@@ -134,8 +134,8 @@ int main()
         shaderConfig.fragmentShaderPath = "shaders/pbr.frag.spv";
         shaderConfig.vertexBinding = Mantrax::Vertex::GetBindingDescription();
         shaderConfig.vertexAttributes = Mantrax::Vertex::GetAttributeDescriptions();
-        shaderConfig.cullMode = VK_CULL_MODE_NONE; // Desactivado para debug
-        shaderConfig.depthTestEnable = false;      // Desactivado temporalmente
+        shaderConfig.cullMode = VK_CULL_MODE_BACK_BIT; // Activar culling
+        shaderConfig.depthTestEnable = true;           // ACTIVAR DEPTH TEST
 
         auto shader = gfx.CreateShader(shaderConfig);
         std::cout << "Shader PBR creado\n\n";

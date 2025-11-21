@@ -24,6 +24,7 @@
 #include <set>
 #include <iostream>
 #include <functional>
+#include <array>
 
 namespace Mantrax
 {
@@ -211,7 +212,11 @@ namespace Mantrax
               m_DescriptorPool(VK_NULL_HANDLE),
               m_ImageAvailableSemaphore(VK_NULL_HANDLE),
               m_RenderFinishedSemaphore(VK_NULL_HANDLE),
-              m_InFlightFence(VK_NULL_HANDLE)
+              m_InFlightFence(VK_NULL_HANDLE),
+              m_DepthImage(VK_NULL_HANDLE),
+              m_DepthImageMemory(VK_NULL_HANDLE),
+              m_DepthImageView(VK_NULL_HANDLE),
+              m_DepthFormat(VK_FORMAT_D32_SFLOAT)
         {
             // Obtener tamaño inicial de ventana
             RECT rect;
@@ -388,6 +393,11 @@ namespace Mantrax
         VkQueue m_GraphicsQueue;
         VkQueue m_PresentQueue;
 
+        VkImage m_DepthImage;
+        VkDeviceMemory m_DepthImageMemory;
+        VkImageView m_DepthImageView;
+        VkFormat m_DepthFormat;
+
         // Swapchain
         VkSwapchainKHR m_Swapchain;
         VkFormat m_SwapchainImageFormat;
@@ -539,6 +549,7 @@ namespace Mantrax
             CreateLogicalDevice();
             CreateSwapchain();
             CreateImageViews();
+            CreateDepthResources();
             CreateRenderPass();
             CreateDescriptorPool();
             CreateFramebuffers();
@@ -754,45 +765,141 @@ namespace Mantrax
             }
         }
 
+        VkFormat FindDepthFormat()
+        {
+            std::vector<VkFormat> candidates = {
+                VK_FORMAT_D32_SFLOAT,
+                VK_FORMAT_D32_SFLOAT_S8_UINT,
+                VK_FORMAT_D24_UNORM_S8_UINT};
+
+            for (VkFormat format : candidates)
+            {
+                VkFormatProperties props;
+                vkGetPhysicalDeviceFormatProperties(m_PhysicalDevice, format, &props);
+
+                if (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+                {
+                    return format;
+                }
+            }
+
+            throw std::runtime_error("No se encontró formato de depth adecuado");
+        }
+
+        void CreateDepthResources()
+        {
+            m_DepthFormat = FindDepthFormat();
+
+            // Crear imagen de depth
+            VkImageCreateInfo imageInfo{};
+            imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            imageInfo.imageType = VK_IMAGE_TYPE_2D;
+            imageInfo.extent.width = m_SwapchainExtent.width;
+            imageInfo.extent.height = m_SwapchainExtent.height;
+            imageInfo.extent.depth = 1;
+            imageInfo.mipLevels = 1;
+            imageInfo.arrayLayers = 1;
+            imageInfo.format = m_DepthFormat;
+            imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+            imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+            imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+            if (vkCreateImage(m_Device, &imageInfo, nullptr, &m_DepthImage) != VK_SUCCESS)
+                throw std::runtime_error("Error creando depth image");
+
+            VkMemoryRequirements memReqs;
+            vkGetImageMemoryRequirements(m_Device, m_DepthImage, &memReqs);
+
+            VkMemoryAllocateInfo allocInfo{};
+            allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+            allocInfo.allocationSize = memReqs.size;
+            allocInfo.memoryTypeIndex = FindMemoryType(memReqs.memoryTypeBits,
+                                                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+            if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &m_DepthImageMemory) != VK_SUCCESS)
+                throw std::runtime_error("Error allocando memoria depth");
+
+            vkBindImageMemory(m_Device, m_DepthImage, m_DepthImageMemory, 0);
+
+            // Crear image view
+            VkImageViewCreateInfo viewInfo{};
+            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            viewInfo.image = m_DepthImage;
+            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            viewInfo.format = m_DepthFormat;
+            viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            viewInfo.subresourceRange.baseMipLevel = 0;
+            viewInfo.subresourceRange.levelCount = 1;
+            viewInfo.subresourceRange.baseArrayLayer = 0;
+            viewInfo.subresourceRange.layerCount = 1;
+
+            if (vkCreateImageView(m_Device, &viewInfo, nullptr, &m_DepthImageView) != VK_SUCCESS)
+                throw std::runtime_error("Error creando depth image view");
+        }
+
         void CreateRenderPass()
         {
-            VkAttachmentDescription color{};
-            color.format = m_SwapchainImageFormat;
-            color.samples = VK_SAMPLE_COUNT_1_BIT;
-            color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            color.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            color.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            color.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            color.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            // Color attachment
+            VkAttachmentDescription colorAttachment{};
+            colorAttachment.format = m_SwapchainImageFormat;
+            colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+            colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-            VkAttachmentReference ref{};
-            ref.attachment = 0;
-            ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            // Depth attachment (NUEVO)
+            VkAttachmentDescription depthAttachment{};
+            depthAttachment.format = m_DepthFormat;
+            depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+            depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-            VkSubpassDescription sub{};
-            sub.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-            sub.colorAttachmentCount = 1;
-            sub.pColorAttachments = &ref;
+            VkAttachmentReference colorRef{};
+            colorRef.attachment = 0;
+            colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-            VkSubpassDependency dep{};
-            dep.srcSubpass = VK_SUBPASS_EXTERNAL;
-            dep.dstSubpass = 0;
-            dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            dep.srcAccessMask = 0;
-            dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            VkAttachmentReference depthRef{};
+            depthRef.attachment = 1;
+            depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-            VkRenderPassCreateInfo ci{};
-            ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-            ci.attachmentCount = 1;
-            ci.pAttachments = &color;
-            ci.subpassCount = 1;
-            ci.pSubpasses = &sub;
-            ci.dependencyCount = 1;
-            ci.pDependencies = &dep;
+            VkSubpassDescription subpass{};
+            subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            subpass.colorAttachmentCount = 1;
+            subpass.pColorAttachments = &colorRef;
+            subpass.pDepthStencilAttachment = &depthRef; // AÑADIR DEPTH
 
-            if (vkCreateRenderPass(m_Device, &ci, nullptr, &m_RenderPass) != VK_SUCCESS)
+            VkSubpassDependency dependency{};
+            dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+            dependency.dstSubpass = 0;
+            dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                                      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                                      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            dependency.srcAccessMask = 0;
+            dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                                       VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+            std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
+
+            VkRenderPassCreateInfo renderPassInfo{};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+            renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            renderPassInfo.pAttachments = attachments.data();
+            renderPassInfo.subpassCount = 1;
+            renderPassInfo.pSubpasses = &subpass;
+            renderPassInfo.dependencyCount = 1;
+            renderPassInfo.pDependencies = &dependency;
+
+            if (vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS)
                 throw std::runtime_error("Error creando render pass");
         }
 
@@ -818,22 +925,25 @@ namespace Mantrax
 
             for (size_t i = 0; i < m_SwapchainImageViews.size(); ++i)
             {
-                VkImageView att[] = {m_SwapchainImageViews[i]};
+                std::array<VkImageView, 2> attachments = {
+                    m_SwapchainImageViews[i],
+                    m_DepthImageView // AÑADIR DEPTH VIEW
+                };
 
-                VkFramebufferCreateInfo ci{};
-                ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-                ci.renderPass = m_RenderPass;
-                ci.attachmentCount = 1;
-                ci.pAttachments = att;
-                ci.width = m_SwapchainExtent.width;
-                ci.height = m_SwapchainExtent.height;
-                ci.layers = 1;
+                VkFramebufferCreateInfo framebufferInfo{};
+                framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+                framebufferInfo.renderPass = m_RenderPass;
+                framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+                framebufferInfo.pAttachments = attachments.data();
+                framebufferInfo.width = m_SwapchainExtent.width;
+                framebufferInfo.height = m_SwapchainExtent.height;
+                framebufferInfo.layers = 1;
 
-                if (vkCreateFramebuffer(m_Device, &ci, nullptr, &m_SwapchainFramebuffers[i]) != VK_SUCCESS)
+                if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr,
+                                        &m_SwapchainFramebuffers[i]) != VK_SUCCESS)
                     throw std::runtime_error("Error creando framebuffer");
             }
         }
-
         void CreateCommandPool()
         {
             VkCommandPoolCreateInfo ci{};
@@ -1127,25 +1237,26 @@ namespace Mantrax
 
         void RecordCommandBuffer(VkCommandBuffer cmd, uint32_t index)
         {
-            VkCommandBufferBeginInfo bi{};
-            bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            VkCommandBufferBeginInfo beginInfo{};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-            if (vkBeginCommandBuffer(cmd, &bi) != VK_SUCCESS)
+            if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
                 throw std::runtime_error("Error comenzando command buffer");
 
-            VkClearValue clear{};
-            clear.color = m_Config.clearColor;
+            std::array<VkClearValue, 2> clearValues{};
+            clearValues[0].color = m_Config.clearColor;
+            clearValues[1].depthStencil = {1.0f, 0}; // AÑADIR CLEAR DEPTH
 
-            VkRenderPassBeginInfo rp{};
-            rp.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            rp.renderPass = m_RenderPass;
-            rp.framebuffer = m_SwapchainFramebuffers[index];
-            rp.renderArea.offset = {0, 0};
-            rp.renderArea.extent = m_SwapchainExtent;
-            rp.clearValueCount = 1;
-            rp.pClearValues = &clear;
+            VkRenderPassBeginInfo renderPassInfo{};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderPassInfo.renderPass = m_RenderPass;
+            renderPassInfo.framebuffer = m_SwapchainFramebuffers[index];
+            renderPassInfo.renderArea.offset = {0, 0};
+            renderPassInfo.renderArea.extent = m_SwapchainExtent;
+            renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+            renderPassInfo.pClearValues = clearValues.data();
 
-            vkCmdBeginRenderPass(cmd, &rp, VK_SUBPASS_CONTENTS_INLINE);
+            vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
             for (const auto &obj : m_RenderObjects)
             {
@@ -1200,6 +1311,22 @@ namespace Mantrax
                 vkDestroyImageView(m_Device, iv, nullptr);
             m_SwapchainImageViews.clear();
 
+            if (m_DepthImageView)
+            {
+                vkDestroyImageView(m_Device, m_DepthImageView, nullptr);
+                m_DepthImageView = VK_NULL_HANDLE;
+            }
+            if (m_DepthImage)
+            {
+                vkDestroyImage(m_Device, m_DepthImage, nullptr);
+                m_DepthImage = VK_NULL_HANDLE;
+            }
+            if (m_DepthImageMemory)
+            {
+                vkFreeMemory(m_Device, m_DepthImageMemory, nullptr);
+                m_DepthImageMemory = VK_NULL_HANDLE;
+            }
+
             if (m_RenderPass)
             {
                 vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
@@ -1240,6 +1367,7 @@ namespace Mantrax
 
             CreateSwapchain();
             CreateImageViews();
+            CreateDepthResources();
             CreateRenderPass();
             CreateFramebuffers();
             CreateCommandBuffers();
