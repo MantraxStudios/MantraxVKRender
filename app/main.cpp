@@ -2,11 +2,15 @@
 #include "../render/include/MantraxGFX_API.h"
 #include "FPSCamera.h"
 #include "MinecraftChunk.h"
+#include "ImGuiManager.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <chrono>
+
+// Forward declaration para ImGui Win32 handler
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 // ============================================================================
 // ESTADO DE INPUT
@@ -43,18 +47,24 @@ void CopyMat4(float *dest, const glm::mat4 &src)
 // ============================================================================
 LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    // IMPORTANTE: Dejar que ImGui procese primero los mensajes
+    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wp, lp))
+        return true;
+
+    // Si ImGui quiere capturar el input, no procesarlo para el juego
+    ImGuiIO &io = ImGui::GetIO();
+
     switch (msg)
     {
     case WM_LBUTTONDOWN:
-        // Capturar mouse cuando se hace click
-        if (!g_Input.mouseCapture)
+        // Solo capturar mouse si ImGui no lo está usando
+        if (!io.WantCaptureMouse && !g_Input.mouseCapture)
         {
             g_Input.mouseCapture = true;
             g_Input.firstMouse = true;
             SetCapture(hwnd);
-            ShowCursor(FALSE); // Ocultar cursor
+            ShowCursor(FALSE);
 
-            // Centrar cursor
             RECT rect;
             GetClientRect(hwnd, &rect);
             POINT center = {rect.right / 2, rect.bottom / 2};
@@ -64,70 +74,76 @@ LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
 
     case WM_KEYDOWN:
-        switch (wp)
+        // Solo procesar teclas si ImGui no las está usando
+        if (!io.WantCaptureKeyboard)
         {
-        case 'W':
-            g_Input.keyW = true;
-            break;
-        case 'A':
-            g_Input.keyA = true;
-            break;
-        case 'S':
-            g_Input.keyS = true;
-            break;
-        case 'D':
-            g_Input.keyD = true;
-            break;
-        case VK_SPACE:
-            g_Input.keySpace = true;
-            break;
-        case VK_SHIFT:
-            g_Input.keyShift = true;
-            break;
-        case VK_CONTROL:
-            g_Input.keyCtrl = true;
-            break;
+            switch (wp)
+            {
+            case 'W':
+                g_Input.keyW = true;
+                break;
+            case 'A':
+                g_Input.keyA = true;
+                break;
+            case 'S':
+                g_Input.keyS = true;
+                break;
+            case 'D':
+                g_Input.keyD = true;
+                break;
+            case VK_SPACE:
+                g_Input.keySpace = true;
+                break;
+            case VK_SHIFT:
+                g_Input.keyShift = true;
+                break;
+            case VK_CONTROL:
+                g_Input.keyCtrl = true;
+                break;
+            }
         }
         return 0;
 
     case WM_KEYUP:
-        switch (wp)
+        if (!io.WantCaptureKeyboard)
         {
-        case 'W':
-            g_Input.keyW = false;
-            break;
-        case 'A':
-            g_Input.keyA = false;
-            break;
-        case 'S':
-            g_Input.keyS = false;
-            break;
-        case 'D':
-            g_Input.keyD = false;
-            break;
-        case VK_SPACE:
-            g_Input.keySpace = false;
-            break;
-        case VK_SHIFT:
-            g_Input.keyShift = false;
-            break;
-        case VK_CONTROL:
-            g_Input.keyCtrl = false;
-            break;
-        case VK_ESCAPE:
-            // Liberar mouse con ESC
-            if (g_Input.mouseCapture)
+            switch (wp)
             {
-                g_Input.mouseCapture = false;
-                ReleaseCapture();
-                ShowCursor(TRUE);
+            case 'W':
+                g_Input.keyW = false;
+                break;
+            case 'A':
+                g_Input.keyA = false;
+                break;
+            case 'S':
+                g_Input.keyS = false;
+                break;
+            case 'D':
+                g_Input.keyD = false;
+                break;
+            case VK_SPACE:
+                g_Input.keySpace = false;
+                break;
+            case VK_SHIFT:
+                g_Input.keyShift = false;
+                break;
+            case VK_CONTROL:
+                g_Input.keyCtrl = false;
+                break;
+            case VK_ESCAPE:
+                if (g_Input.mouseCapture)
+                {
+                    g_Input.mouseCapture = false;
+                    ReleaseCapture();
+                    ShowCursor(TRUE);
+                }
+                break;
             }
-            break;
         }
         return 0;
 
     case WM_MOUSEMOVE:
-        if (g_Input.mouseCapture && g_Camera)
+        if (g_Input.mouseCapture && g_Camera && !io.WantCaptureMouse)
         {
             POINT currentPos;
             GetCursorPos(&currentPos);
@@ -140,13 +156,11 @@ LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             }
 
             float xoffset = static_cast<float>(currentPos.x - g_Input.lastMousePos.x);
-            float yoffset = static_cast<float>(g_Input.lastMousePos.y - currentPos.y); // Invertido
+            float yoffset = static_cast<float>(g_Input.lastMousePos.y - currentPos.y);
 
             g_Input.lastMousePos = currentPos;
-
             g_Camera->ProcessMouseMovement(xoffset, yoffset);
 
-            // Recentrar cursor para evitar que salga de la ventana
             RECT rect;
             GetClientRect(hwnd, &rect);
             POINT center = {rect.right / 2, rect.bottom / 2};
@@ -160,7 +174,7 @@ LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
 
     case WM_MOUSEWHEEL:
-        if (g_Camera)
+        if (g_Camera && !io.WantCaptureMouse)
         {
             float delta = GET_WHEEL_DELTA_WPARAM(wp) / 120.0f;
             g_Camera->ProcessMouseScroll(delta * 2.0f);
@@ -169,6 +183,53 @@ LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     }
 
     return 0;
+}
+
+// Agrega este método a tu ImGuiManager.h:
+
+void ShowPerformanceWindow(int fps, const glm::vec3 &cameraPos, float fov, bool sprint, bool mouseCaptured)
+{
+    ImGui::Begin("Performance Monitor", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+    // FPS con color según rendimiento
+    ImGui::Text("FPS: ");
+    ImGui::SameLine();
+    if (fps >= 60)
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "%d", fps);
+    else if (fps >= 30)
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%d", fps);
+    else
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "%d", fps);
+
+    ImGui::Separator();
+
+    // Posición de la cámara
+    ImGui::Text("Position: (%d, %d, %d)",
+                (int)cameraPos.x,
+                (int)cameraPos.y,
+                (int)cameraPos.z);
+
+    // FOV
+    ImGui::Text("FOV: %d", (int)fov);
+
+    ImGui::Separator();
+
+    // Estado
+    ImGui::Text("Mode: ");
+    ImGui::SameLine();
+    if (sprint)
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "SPRINT");
+    else
+        ImGui::Text("Walk");
+
+    ImGui::Text("Mouse: ");
+    ImGui::SameLine();
+    if (mouseCaptured)
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "CAPTURED");
+    else
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Free");
+
+    ImGui::End();
 }
 
 // ============================================================================
@@ -204,10 +265,17 @@ int main()
 
         std::cout << "Inicializando GFX...\n";
         Mantrax::GFXConfig gfxConfig;
-        gfxConfig.clearColor = {0.53f, 0.81f, 0.92f, 1.0f}; // Cielo azul
+        gfxConfig.clearColor = {0.53f, 0.81f, 0.92f, 1.0f};
 
         Mantrax::GFX gfx(hInst, window.GetHWND(), gfxConfig);
         std::cout << "GFX inicializado\n\n";
+
+        // =====================================================================
+        // INICIALIZAR IMGUI
+        // =====================================================================
+        std::cout << "Inicializando ImGui...\n";
+        Mantrax::ImGuiManager imgui(window.GetHWND(), &gfx);
+        std::cout << "ImGui inicializado\n\n";
 
         std::cout << "Creando shader...\n";
         Mantrax::ShaderConfig shaderConfig;
@@ -228,7 +296,7 @@ int main()
         auto startTime = std::chrono::high_resolution_clock::now();
 
         Mantrax::ChunkConfig chunkConfig;
-        chunkConfig.chunkSizeX = 64; // Más grande para explorar
+        chunkConfig.chunkSizeX = 64;
         chunkConfig.chunkSizeY = 64;
         chunkConfig.chunkSizeZ = 64;
         chunkConfig.seed = 42;
@@ -268,7 +336,7 @@ int main()
         camera.SetMovementSpeed(15.0f);
         camera.SetMouseSensitivity(0.1f);
 
-        g_Camera = &camera; // Para acceso desde WndProc
+        g_Camera = &camera;
 
         std::cout << "Camara FPS configurada\n";
         std::cout << "  - Posicion: ("
@@ -277,7 +345,6 @@ int main()
                   << camera.GetPosition().z << ")\n";
         std::cout << "  - Velocidad: " << camera.GetMovementSpeed() << " unidades/seg\n\n";
 
-        // Configurar UBO inicial
         Mantrax::UniformBufferObject ubo{};
         glm::mat4 model = glm::mat4(1.0f);
 
@@ -324,14 +391,12 @@ int main()
             float delta = (now - lastTime) / 1000.0f;
             lastTime = now;
 
-            // Limitar delta para evitar saltos grandes
             if (delta > 0.1f)
                 delta = 0.1f;
 
             totalTime += delta;
             frameCount++;
 
-            // Calcular FPS
             if (totalTime - lastTimeForFPS >= 1.0f)
             {
                 fps = frameCount;
@@ -340,28 +405,29 @@ int main()
             }
 
             // =================================================================
-            // PROCESAR MOVIMIENTO FPS
+            // PROCESAR MOVIMIENTO FPS (solo si mouse está capturado)
             // =================================================================
+            if (g_Input.mouseCapture)
+            {
+                bool sprint = g_Input.keyShift;
 
-            bool sprint = g_Input.keyShift;
-
-            if (g_Input.keyW)
-                camera.ProcessKeyboard(Mantrax::FORWARD, delta, sprint);
-            if (g_Input.keyS)
-                camera.ProcessKeyboard(Mantrax::BACKWARD, delta, sprint);
-            if (g_Input.keyA)
-                camera.ProcessKeyboard(Mantrax::LEFT, delta, sprint);
-            if (g_Input.keyD)
-                camera.ProcessKeyboard(Mantrax::RIGHT, delta, sprint);
-            if (g_Input.keySpace)
-                camera.ProcessKeyboard(Mantrax::UP, delta, sprint);
-            if (g_Input.keyCtrl)
-                camera.ProcessKeyboard(Mantrax::DOWN, delta, sprint);
+                if (g_Input.keyW)
+                    camera.ProcessKeyboard(Mantrax::FORWARD, delta, sprint);
+                if (g_Input.keyS)
+                    camera.ProcessKeyboard(Mantrax::BACKWARD, delta, sprint);
+                if (g_Input.keyA)
+                    camera.ProcessKeyboard(Mantrax::LEFT, delta, sprint);
+                if (g_Input.keyD)
+                    camera.ProcessKeyboard(Mantrax::RIGHT, delta, sprint);
+                if (g_Input.keySpace)
+                    camera.ProcessKeyboard(Mantrax::UP, delta, sprint);
+                if (g_Input.keyCtrl)
+                    camera.ProcessKeyboard(Mantrax::DOWN, delta, sprint);
+            }
 
             // =================================================================
             // REGENERAR TERRENO
             // =================================================================
-
             if (GetAsyncKeyState('R') & 0x8000)
             {
                 static bool rPressed = false;
@@ -387,7 +453,6 @@ int main()
                     std::cout << "Terreno regenerado en " << regenDuration.count() << "ms\n";
                     std::cout << "Vertices: " << vertices.size() << " | Triangulos: " << indices.size() / 3 << "\n\n";
 
-                    // Recrear mesh
                     gfx.ClearRenderObjects();
                     mesh = gfx.CreateMesh(vertices, indices);
                     obj.mesh = mesh;
@@ -424,12 +489,10 @@ int main()
             // =================================================================
             // ACTUALIZAR MATRICES
             // =================================================================
-
             CopyMat4(ubo.model, model);
             CopyMat4(ubo.view, camera.GetViewMatrix());
             CopyMat4(ubo.projection, camera.GetProjectionMatrix());
 
-            // Manejar resize
             if (window.WasFramebufferResized())
             {
                 uint32_t w, h;
@@ -445,24 +508,32 @@ int main()
                 std::cout << "Ventana redimensionada: " << w << "x" << h << "\n";
             }
 
-            // Actualizar UBO
             gfx.UpdateMaterialUBO(material.get(), ubo);
 
-            // Dibujar
-            gfx.DrawFrame();
+            // =================================================================
+            // PREPARAR IMGUI
+            // =================================================================
+            imgui.BeginFrame();
 
-            // Debug info cada 2 segundos
-            static float lastDebug = 0.0f;
-            if (totalTime - lastDebug >= 2.0f)
-            {
-                lastDebug = totalTime;
-                glm::vec3 pos = camera.GetPosition();
-                std::cout << "FPS: " << fps
-                          << " | Pos: (" << (int)pos.x << ", " << (int)pos.y << ", " << (int)pos.z << ")"
-                          << " | FOV: " << (int)camera.GetFOV()
-                          << " | " << (sprint ? "SPRINT" : "Walk")
-                          << " | Mouse: " << (g_Input.mouseCapture ? "CAPTURED" : "Free") << "\n";
-            }
+            // Ventana de debug principal
+            imgui.ShowDebugWindow(fps, camera.GetPosition(), camera.GetFOV(),
+                                  g_Input.keyShift, g_Input.mouseCapture);
+
+            // Ventana de performance (la nueva)
+            imgui.ShowDebugWindow(fps, camera.GetPosition(), camera.GetFOV(),
+                                  g_Input.keyShift, g_Input.mouseCapture);
+
+            // TERMINAR frame de ImGui
+            ImGui::Render();
+
+            // =================================================================
+            // RENDERIZAR
+            // =================================================================
+            gfx.DrawFrame([](VkCommandBuffer cmd)
+                          { ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd); });
+
+            // Ya no necesitas el bloque de "Debug info cada 2 segundos"
+            // porque ImGui se actualiza en cada frame automáticamente
         }
 
         std::cout << "\nCerrando aplicacion...\n";

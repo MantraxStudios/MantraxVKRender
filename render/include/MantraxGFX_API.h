@@ -288,7 +288,7 @@ namespace Mantrax
         }
 
         // Dibujar un frame (devuelve true si necesita recrear swapchain)
-        bool DrawFrame()
+        bool DrawFrame(std::function<void(VkCommandBuffer)> imguiRenderCallback = nullptr)
         {
             // Manejar resize si es necesario
             if (m_FramebufferResized)
@@ -320,9 +320,9 @@ namespace Mantrax
             // Solo resetear fence después de que acquire tuvo éxito
             vkResetFences(m_Device, 1, &m_InFlightFence);
 
-            // Grabar comandos
+            // Grabar comandos CON el callback de ImGui
             vkResetCommandBuffer(m_CommandBuffers[imageIndex], 0);
-            RecordCommandBuffer(m_CommandBuffers[imageIndex], imageIndex);
+            RecordCommandBuffer(m_CommandBuffers[imageIndex], imageIndex, imguiRenderCallback);
 
             // Submit
             VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -373,6 +373,14 @@ namespace Mantrax
         VkQueue GetGraphicsQueue() const { return m_GraphicsQueue; }
         VkCommandPool GetCommandPool() const { return m_CommandPool; }
         VkExtent2D GetSwapchainExtent() const { return m_SwapchainExtent; }
+        VkRenderPass GetRenderPass() const { return m_RenderPass; }
+        uint32_t GetGraphicsQueueFamily() const { return m_GraphicsQueueFamily; }
+        std::vector<VkCommandBuffer> GetCommandBuffer() const { return m_CommandBuffers; }
+
+        VkCommandBuffer GetCurrentCommandBuffer(uint32_t imageIndex) const
+        {
+            return m_CommandBuffers[imageIndex];
+        }
 
         GFX(const GFX &) = delete;
         GFX &operator=(const GFX &) = delete;
@@ -1245,7 +1253,8 @@ namespace Mantrax
         // RECORDING
         // ====================================================================
 
-        void RecordCommandBuffer(VkCommandBuffer cmd, uint32_t index)
+        void RecordCommandBuffer(VkCommandBuffer cmd, uint32_t index,
+                                 std::function<void(VkCommandBuffer)> imguiRenderCallback = nullptr)
         {
             VkCommandBufferBeginInfo beginInfo{};
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1255,7 +1264,7 @@ namespace Mantrax
 
             std::array<VkClearValue, 2> clearValues{};
             clearValues[0].color = m_Config.clearColor;
-            clearValues[1].depthStencil = {1.0f, 0}; // AÑADIR CLEAR DEPTH
+            clearValues[1].depthStencil = {1.0f, 0};
 
             VkRenderPassBeginInfo renderPassInfo{};
             renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1268,6 +1277,7 @@ namespace Mantrax
 
             vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+            // Renderizar objetos 3D
             for (const auto &obj : m_RenderObjects)
             {
                 if (!obj.mesh || !obj.material || !obj.material->shader)
@@ -1291,6 +1301,12 @@ namespace Mantrax
                                         0, 1, &obj.material->descriptorSet, 0, nullptr);
 
                 vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()), 1, 0, 0, 0);
+            }
+
+            // ¡AQUÍ! Renderizar ImGui ANTES de terminar el render pass
+            if (imguiRenderCallback)
+            {
+                imguiRenderCallback(cmd);
             }
 
             vkCmdEndRenderPass(cmd);
