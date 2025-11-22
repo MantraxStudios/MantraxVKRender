@@ -547,7 +547,7 @@ namespace Mantrax
             CreateSurface();
             PickPhysicalDevice();
             CreateLogicalDevice();
-            CreateSwapchain();
+            CreateSwapchain(false);
             CreateImageViews();
             CreateDepthResources();
             CreateRenderPass();
@@ -666,7 +666,7 @@ namespace Mantrax
             vkGetDeviceQueue(m_Device, m_PresentQueueFamily, 0, &m_PresentQueue);
         }
 
-        void CreateSwapchain()
+        void CreateSwapchain(bool enableVSync)
         {
             VkSurfaceCapabilitiesKHR caps{};
             vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, m_Surface, &caps);
@@ -728,7 +728,17 @@ namespace Mantrax
 
             ci.preTransform = caps.currentTransform;
             ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-            ci.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+
+            // Modificar el Present Mode para habilitar o deshabilitar V-Sync
+            if (enableVSync)
+            {
+                ci.presentMode = VK_PRESENT_MODE_FIFO_KHR; // V-Sync habilitado
+            }
+            else
+            {
+                ci.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR; // V-Sync deshabilitado
+            }
+
             ci.clipped = VK_TRUE;
             ci.oldSwapchain = VK_NULL_HANDLE;
 
@@ -1365,7 +1375,7 @@ namespace Mantrax
 
             CleanupSwapchain();
 
-            CreateSwapchain();
+            CreateSwapchain(false);
             CreateImageViews();
             CreateDepthResources();
             CreateRenderPass();
