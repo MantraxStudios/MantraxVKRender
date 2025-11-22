@@ -185,8 +185,6 @@ LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return 0;
 }
 
-// Agrega este método a tu ImGuiManager.h:
-
 void ShowPerformanceWindow(int fps, const glm::vec3 &cameraPos, float fov, bool sprint, bool mouseCaptured)
 {
     ImGui::Begin("Performance Monitor", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
