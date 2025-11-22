@@ -7,12 +7,17 @@ layout(location = 3) in vec3 fragWorldPos;
 
 layout(location = 0) out vec4 outColor;
 
-// Parámetros PBR básicos
-const vec3 lightPos = vec3(5.0, 5.0, 5.0);
+// Parámetros de iluminación
+const vec3 lightPos = vec3(5.0, -5.0, 5.0);
 const vec3 lightColor = vec3(1.0, 1.0, 1.0);
-const float lightIntensity = 10.0;
+const float lightIntensity = 15.0;
 
 const vec3 camPos = vec3(0.0, 0.0, 3.0);
+
+// Luz ambiente hemiesférica
+const vec3 ambientSkyColor = vec3(0.5, 0.6, 0.8);
+const vec3 ambientGroundColor = vec3(0.2, 0.15, 0.1);
+const float ambientIntensity = 0.5;
 
 // Parámetros del material
 const float metallic = 0.1;
@@ -62,8 +67,15 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// Luz ambiente hemiesférica mejorada
+vec3 CalculateHemisphericAmbient(vec3 N, vec3 albedo) {
+    float hemisphereBlend = N.y * 0.5 + 0.5;
+    vec3 ambient = mix(ambientGroundColor, ambientSkyColor, hemisphereBlend);
+    return ambient * albedo * ambientIntensity;
+}
+
 void main() {
-    // Normalizar vectores (CRÍTICO para evitar artefactos)
+    // Normalizar vectores
     vec3 N = normalize(fragNormal);
     vec3 V = normalize(camPos - fragWorldPos);
     
@@ -88,7 +100,7 @@ void main() {
     float attenuation = 1.0 / (distance * distance);
     vec3 radiance = lightColor * lightIntensity * attenuation;
     
-    // Calcular productos punto con protección
+    // Calcular productos punto
     float NdotV = max(dot(N, V), EPSILON);
     float NdotL = max(dot(N, L), 0.0);
     float HdotV = max(dot(H, V), 0.0);
@@ -98,26 +110,31 @@ void main() {
     float G = GeometrySmith(N, V, L, roughness);
     vec3 F = fresnelSchlick(HdotV, F0);
     
-    // Especular con denominador protegido
+    // Especular
     vec3 numerator = NDF * G * F;
     float denominator = 4.0 * NdotV * max(NdotL, EPSILON) + EPSILON;
     vec3 specular = numerator / denominator;
     
-    // Balance entre difuso y especular
+    // Balance difuso/especular
     vec3 kS = F;
     vec3 kD = vec3(1.0) - kS;
     kD *= 1.0 - metallic;
     
-    // Contribución final de luz directa
+    // Luz directa
     vec3 Lo = (kD * albedo / PI + specular) * radiance * NdotL;
     
-    // Luz ambiente mejorada
-    vec3 ambient = vec3(0.1) * albedo * ao;
+    // Luz ambiente hemiesférica
+    vec3 ambient = CalculateHemisphericAmbient(N, albedo) * ao;
     
-    vec3 color = ambient + Lo;
+    // Sombra suave en áreas no iluminadas
+    vec3 shadowColor = vec3(0.1, 0.1, 0.15);
+    vec3 shadowed = mix(shadowColor * albedo, Lo, NdotL);
     
-    // Tone mapping (Reinhard)
-    color = color / (color + vec3(1.0));
+    // Color final
+    vec3 color = ambient + shadowed;
+    
+    // Tone mapping mejorado
+    color = color / (color + vec3(0.8));
     
     // Corrección gamma
     color = pow(color, vec3(1.0/2.2));
