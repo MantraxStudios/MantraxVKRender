@@ -493,7 +493,7 @@ int main()
 
             imgui.BeginFrame();
 
-            ImGui::Begin("Toon Outline Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+            ImGui::Begin("Toon Outline Settings", nullptr);
 
             ImGui::Text("FPS: ");
             ImGui::SameLine();
