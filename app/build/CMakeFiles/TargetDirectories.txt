@@ -1,3 +1,0 @@
-C:/Users/tupap/Desktop/MantraxVKRender/app/build/CMakeFiles/MantraxApp.dir
-C:/Users/tupap/Desktop/MantraxVKRender/app/build/CMakeFiles/edit_cache.dir
-C:/Users/tupap/Desktop/MantraxVKRender/app/build/CMakeFiles/rebuild_cache.dir

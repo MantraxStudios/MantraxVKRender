@@ -28,16 +28,13 @@
 
 namespace Mantrax
 {
-    // ========================================================================
-    // ESTRUCTURAS DE DATOS
-    // ========================================================================
-
     struct Vertex
     {
         float position[3];
         float color[3];
         float texCoord[2];
         float normal[3];
+        float barycentric[3];
 
         static VkVertexInputBindingDescription GetBindingDescription()
         {
@@ -50,31 +47,32 @@ namespace Mantrax
 
         static std::vector<VkVertexInputAttributeDescription> GetAttributeDescriptions()
         {
-            std::vector<VkVertexInputAttributeDescription> attrs(4);
+            std::vector<VkVertexInputAttributeDescription> attrs(5);
 
-            // Position
             attrs[0].binding = 0;
             attrs[0].location = 0;
             attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
             attrs[0].offset = offsetof(Vertex, position);
 
-            // Color
             attrs[1].binding = 0;
             attrs[1].location = 1;
             attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
             attrs[1].offset = offsetof(Vertex, color);
 
-            // TexCoord
             attrs[2].binding = 0;
             attrs[2].location = 2;
             attrs[2].format = VK_FORMAT_R32G32_SFLOAT;
             attrs[2].offset = offsetof(Vertex, texCoord);
 
-            // Normal
             attrs[3].binding = 0;
             attrs[3].location = 3;
             attrs[3].format = VK_FORMAT_R32G32B32_SFLOAT;
             attrs[3].offset = offsetof(Vertex, normal);
+
+            attrs[4].binding = 0;
+            attrs[4].location = 4;
+            attrs[4].format = VK_FORMAT_R32G32B32_SFLOAT;
+            attrs[4].offset = offsetof(Vertex, barycentric);
 
             return attrs;
         }
@@ -86,10 +84,6 @@ namespace Mantrax
         float view[16];
         float projection[16];
     };
-
-    // ========================================================================
-    // MESH
-    // ========================================================================
 
     class Mesh
     {
@@ -107,10 +101,6 @@ namespace Mantrax
             : vertices(verts), indices(inds) {}
     };
 
-    // ========================================================================
-    // SHADER
-    // ========================================================================
-
     struct ShaderConfig
     {
         std::string vertexShaderPath;
@@ -118,7 +108,6 @@ namespace Mantrax
         VkVertexInputBindingDescription vertexBinding;
         std::vector<VkVertexInputAttributeDescription> vertexAttributes;
 
-        // Configuración de pipeline
         VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
         VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
@@ -139,17 +128,12 @@ namespace Mantrax
         Shader(const ShaderConfig &cfg) : config(cfg) {}
     };
 
-    // ========================================================================
-    // MATERIAL
-    // ========================================================================
-
     class Material
     {
     public:
         std::shared_ptr<Shader> shader;
         VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 
-        // Datos del uniform buffer
         UniformBufferObject ubo{};
         VkBuffer uniformBuffer = VK_NULL_HANDLE;
         VkDeviceMemory uniformBufferMemory = VK_NULL_HANDLE;
@@ -157,10 +141,6 @@ namespace Mantrax
         Material() = default;
         Material(std::shared_ptr<Shader> shdr) : shader(shdr) {}
     };
-
-    // ========================================================================
-    // RENDER OBJECT
-    // ========================================================================
 
     struct RenderObject
     {
@@ -172,26 +152,44 @@ namespace Mantrax
             : mesh(m), material(mat) {}
     };
 
-    // ========================================================================
-    // GFX CONFIG
-    // ========================================================================
-
     struct GFXConfig
     {
         bool enableValidation = false;
         VkClearColorValue clearColor = {0.0f, 0.0f, 0.1f, 1.0f};
     };
 
-    // ========================================================================
-    // GFX - CLASE PRINCIPAL (SIN GESTIÓN DE VENTANA)
-    // ========================================================================
+    struct FramebufferAttachment
+    {
+        VkImage image = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VkFormat format;
+        VkImageUsageFlags usage;
+        uint32_t width;
+        uint32_t height;
+    };
+
+    class Framebuffer
+    {
+    public:
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
+        VkRenderPass renderPass = VK_NULL_HANDLE;
+
+        FramebufferAttachment colorAttachment;
+        FramebufferAttachment depthAttachment;
+
+        uint32_t width = 0;
+        uint32_t height = 0;
+        bool hasDepth = false;
+
+        Framebuffer() = default;
+    };
 
     class GFX
     {
     public:
         using Config = GFXConfig;
 
-        // Constructor recibe HINSTANCE y HWND externos
         GFX(HINSTANCE hInstance, HWND hWnd, const Config &config = Config{})
             : m_hInstance(hInstance),
               m_hWnd(hWnd),
@@ -218,7 +216,6 @@ namespace Mantrax
               m_DepthImageView(VK_NULL_HANDLE),
               m_DepthFormat(VK_FORMAT_D32_SFLOAT)
         {
-            // Obtener tamaño inicial de ventana
             RECT rect;
             GetClientRect(m_hWnd, &rect);
             m_SwapchainExtent.width = rect.right - rect.left;
@@ -231,10 +228,6 @@ namespace Mantrax
         {
             Cleanup();
         }
-
-        // =====================================================
-        // API PÚBLICA
-        // =====================================================
 
         std::shared_ptr<Shader> CreateShader(const ShaderConfig &config)
         {
@@ -260,6 +253,39 @@ namespace Mantrax
             return material;
         }
 
+        std::shared_ptr<Shader> CreateShaderForFramebuffer(
+            const ShaderConfig &config,
+            std::shared_ptr<Framebuffer> framebuffer)
+        {
+            auto shader = std::make_shared<Shader>(config);
+            CreateShaderPipeline(shader, framebuffer->renderPass);
+            return shader;
+        }
+
+        // Recrear shaders para un framebuffer después de resize
+        void RecreateShaderForFramebuffer(
+            std::shared_ptr<Shader> shader,
+            std::shared_ptr<Framebuffer> framebuffer)
+        {
+            if (shader->pipeline != VK_NULL_HANDLE)
+            {
+                vkDestroyPipeline(m_Device, shader->pipeline, nullptr);
+                shader->pipeline = VK_NULL_HANDLE;
+            }
+            if (shader->pipelineLayout != VK_NULL_HANDLE)
+            {
+                vkDestroyPipelineLayout(m_Device, shader->pipelineLayout, nullptr);
+                shader->pipelineLayout = VK_NULL_HANDLE;
+            }
+            if (shader->descriptorSetLayout != VK_NULL_HANDLE)
+            {
+                vkDestroyDescriptorSetLayout(m_Device, shader->descriptorSetLayout, nullptr);
+                shader->descriptorSetLayout = VK_NULL_HANDLE;
+            }
+
+            CreateShaderPipeline(shader, framebuffer->renderPass);
+        }
+
         void AddRenderObject(const RenderObject &obj)
         {
             m_RenderObjects.push_back(obj);
@@ -281,16 +307,182 @@ namespace Mantrax
             m_NeedCommandBufferRebuild = true;
         }
 
-        // Indicar que el framebuffer cambió de tamaño (llamar externamente)
         void NotifyFramebufferResized()
         {
             m_FramebufferResized = true;
         }
 
-        // Dibujar un frame (devuelve true si necesita recrear swapchain)
+        std::shared_ptr<Framebuffer> CreateFramebuffer(
+            uint32_t width,
+            uint32_t height,
+            VkFormat colorFormat = VK_FORMAT_R8G8B8A8_UNORM,
+            bool withDepth = true,
+            VkImageUsageFlags additionalUsage = 0)
+        {
+            auto fb = std::make_shared<Framebuffer>();
+            fb->width = width;
+            fb->height = height;
+            fb->hasDepth = withDepth;
+
+            // Crear color attachment
+            CreateFramebufferAttachment(
+                fb->colorAttachment,
+                width, height,
+                colorFormat,
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | additionalUsage,
+                VK_IMAGE_ASPECT_COLOR_BIT);
+
+            // Crear depth attachment si se requiere
+            if (withDepth)
+            {
+                CreateFramebufferAttachment(
+                    fb->depthAttachment,
+                    width, height,
+                    m_DepthFormat,
+                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                    VK_IMAGE_ASPECT_DEPTH_BIT);
+            }
+
+            // Crear render pass para el framebuffer
+            CreateFramebufferRenderPass(fb);
+
+            // Crear el framebuffer
+            std::vector<VkImageView> attachments;
+            attachments.push_back(fb->colorAttachment.view);
+
+            if (withDepth)
+            {
+                attachments.push_back(fb->depthAttachment.view);
+            }
+
+            VkFramebufferCreateInfo framebufferInfo{};
+            framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebufferInfo.renderPass = fb->renderPass;
+            framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            framebufferInfo.pAttachments = attachments.data();
+            framebufferInfo.width = width;
+            framebufferInfo.height = height;
+            framebufferInfo.layers = 1;
+
+            if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &fb->framebuffer) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Error creando framebuffer offscreen");
+            }
+
+            return fb;
+        }
+
+        void DestroyFramebuffer(std::shared_ptr<Framebuffer> fb)
+        {
+            if (!fb)
+                return;
+
+            vkDeviceWaitIdle(m_Device);
+
+            if (fb->framebuffer)
+            {
+                vkDestroyFramebuffer(m_Device, fb->framebuffer, nullptr);
+            }
+
+            if (fb->renderPass)
+            {
+                vkDestroyRenderPass(m_Device, fb->renderPass, nullptr);
+            }
+
+            DestroyFramebufferAttachment(fb->colorAttachment);
+
+            if (fb->hasDepth)
+            {
+                DestroyFramebufferAttachment(fb->depthAttachment);
+            }
+        }
+
+        // Renderizar a un framebuffer específico
+        void RenderToFramebuffer(
+            std::shared_ptr<Framebuffer> fb,
+            std::function<void(VkCommandBuffer)> renderCallback,
+            VkClearColorValue clearColor = {0.0f, 0.0f, 0.0f, 1.0f})
+        {
+            if (!fb || !fb->framebuffer)
+                return;
+
+            VkCommandBufferAllocateInfo allocInfo{};
+            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocInfo.commandPool = m_CommandPool;
+            allocInfo.commandBufferCount = 1;
+
+            VkCommandBuffer cmd;
+            vkAllocateCommandBuffers(m_Device, &allocInfo, &cmd);
+
+            VkCommandBufferBeginInfo beginInfo{};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+            vkBeginCommandBuffer(cmd, &beginInfo);
+
+            // Transición de layout para el color attachment
+            TransitionImageLayout(
+                cmd,
+                fb->colorAttachment.image,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_IMAGE_ASPECT_COLOR_BIT);
+
+            std::array<VkClearValue, 2> clearValues{};
+            clearValues[0].color = clearColor;
+            clearValues[1].depthStencil = {1.0f, 0};
+
+            VkRenderPassBeginInfo renderPassInfo{};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderPassInfo.renderPass = fb->renderPass;
+            renderPassInfo.framebuffer = fb->framebuffer;
+            renderPassInfo.renderArea.offset = {0, 0};
+            renderPassInfo.renderArea.extent = {fb->width, fb->height};
+            renderPassInfo.clearValueCount = fb->hasDepth ? 2 : 1;
+            renderPassInfo.pClearValues = clearValues.data();
+
+            vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+            // Ejecutar callback de renderizado
+            if (renderCallback)
+            {
+                renderCallback(cmd);
+            }
+
+            vkCmdEndRenderPass(cmd);
+
+            // Transición a shader read para poder usar como textura
+            TransitionImageLayout(
+                cmd,
+                fb->colorAttachment.image,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_IMAGE_ASPECT_COLOR_BIT);
+
+            vkEndCommandBuffer(cmd);
+
+            VkSubmitInfo submitInfo{};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &cmd;
+
+            vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_GraphicsQueue);
+
+            vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &cmd);
+        }
+
+        VkImageView GetFramebufferColorView(std::shared_ptr<Framebuffer> fb)
+        {
+            return fb ? fb->colorAttachment.view : VK_NULL_HANDLE;
+        }
+
         bool DrawFrame(std::function<void(VkCommandBuffer)> imguiRenderCallback = nullptr)
         {
-            // Manejar resize si es necesario
+            if (m_Device == VK_NULL_HANDLE || m_Swapchain == VK_NULL_HANDLE)
+                return false;
+
             if (m_FramebufferResized)
             {
                 m_FramebufferResized = false;
@@ -298,10 +490,14 @@ namespace Mantrax
                 return true;
             }
 
-            // Esperar que el frame anterior termine
+            if (m_NeedCommandBufferRebuild)
+            {
+                vkDeviceWaitIdle(m_Device);
+                m_NeedCommandBufferRebuild = false;
+            }
+
             vkWaitForFences(m_Device, 1, &m_InFlightFence, VK_TRUE, UINT64_MAX);
 
-            // Intentar adquirir la siguiente imagen
             uint32_t imageIndex;
             VkResult res = vkAcquireNextImageKHR(
                 m_Device, m_Swapchain, UINT64_MAX,
@@ -317,14 +513,17 @@ namespace Mantrax
                 throw std::runtime_error("Error adquiriendo imagen");
             }
 
-            // Solo resetear fence después de que acquire tuvo éxito
+            if (imageIndex >= m_CommandBuffers.size())
+            {
+                RecreateSwapchain();
+                return true;
+            }
+
             vkResetFences(m_Device, 1, &m_InFlightFence);
 
-            // Grabar comandos CON el callback de ImGui
             vkResetCommandBuffer(m_CommandBuffers[imageIndex], 0);
             RecordCommandBuffer(m_CommandBuffers[imageIndex], imageIndex, imguiRenderCallback);
 
-            // Submit
             VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
             VkSubmitInfo si{};
@@ -340,7 +539,6 @@ namespace Mantrax
             if (vkQueueSubmit(m_GraphicsQueue, 1, &si, m_InFlightFence) != VK_SUCCESS)
                 throw std::runtime_error("Error en vkQueueSubmit");
 
-            // Present
             VkPresentInfoKHR pi{};
             pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             pi.waitSemaphoreCount = 1;
@@ -363,9 +561,32 @@ namespace Mantrax
             return false;
         }
 
-        // =====================================================
-        // GETTERS PÚBLICOS
-        // =====================================================
+        void WaitIdle()
+        {
+            if (m_Device != VK_NULL_HANDLE)
+            {
+                vkDeviceWaitIdle(m_Device);
+            }
+        }
+
+        void ClearRenderObjectsSafe()
+        {
+            vkDeviceWaitIdle(m_Device);
+            m_RenderObjects.clear();
+            m_NeedCommandBufferRebuild = true;
+        }
+
+        void AddRenderObjectSafe(const RenderObject &obj)
+        {
+            vkDeviceWaitIdle(m_Device);
+            m_RenderObjects.push_back(obj);
+            m_NeedCommandBufferRebuild = true;
+        }
+
+        std::vector<RenderObject> GetRenderObjects() const
+        {
+            return m_RenderObjects;
+        }
 
         VkInstance GetInstance() const { return m_Instance; }
         VkDevice GetDevice() const { return m_Device; }
@@ -375,12 +596,6 @@ namespace Mantrax
         VkExtent2D GetSwapchainExtent() const { return m_SwapchainExtent; }
         VkRenderPass GetRenderPass() const { return m_RenderPass; }
         uint32_t GetGraphicsQueueFamily() const { return m_GraphicsQueueFamily; }
-        std::vector<VkCommandBuffer> GetCommandBuffer() const { return m_CommandBuffers; }
-
-        VkCommandBuffer GetCurrentCommandBuffer(uint32_t imageIndex) const
-        {
-            return m_CommandBuffers[imageIndex];
-        }
 
         GFX(const GFX &) = delete;
         GFX &operator=(const GFX &) = delete;
@@ -391,7 +606,6 @@ namespace Mantrax
         HWND m_hWnd;
         bool m_FramebufferResized;
 
-        // Vulkan core
         VkInstance m_Instance;
         VkSurfaceKHR m_Surface;
         VkPhysicalDevice m_PhysicalDevice;
@@ -406,39 +620,252 @@ namespace Mantrax
         VkImageView m_DepthImageView;
         VkFormat m_DepthFormat;
 
-        // Swapchain
         VkSwapchainKHR m_Swapchain;
         VkFormat m_SwapchainImageFormat;
         VkExtent2D m_SwapchainExtent;
         std::vector<VkImage> m_SwapchainImages;
         std::vector<VkImageView> m_SwapchainImageViews;
 
-        // Render pass
         VkRenderPass m_RenderPass;
 
-        // Framebuffers + comandos
         std::vector<VkFramebuffer> m_SwapchainFramebuffers;
         VkCommandPool m_CommandPool;
         std::vector<VkCommandBuffer> m_CommandBuffers;
 
-        // Descriptors
         VkDescriptorPool m_DescriptorPool;
 
-        // Sincronización
         VkSemaphore m_ImageAvailableSemaphore;
         VkSemaphore m_RenderFinishedSemaphore;
         VkFence m_InFlightFence;
 
-        // Objetos de renderizado
         std::vector<RenderObject> m_RenderObjects;
         bool m_NeedCommandBufferRebuild = false;
 
-        // Track shaders para recreación
         std::vector<std::shared_ptr<Shader>> m_AllShaders;
 
-        // ====================================================================
-        // HELPERS
-        // ====================================================================
+        void CreateFramebufferAttachment(
+            FramebufferAttachment &attachment,
+            uint32_t width,
+            uint32_t height,
+            VkFormat format,
+            VkImageUsageFlags usage,
+            VkImageAspectFlags aspectMask)
+        {
+            attachment.format = format;
+            attachment.usage = usage;
+            attachment.width = width;
+            attachment.height = height;
+
+            // Crear imagen
+            VkImageCreateInfo imageInfo{};
+            imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            imageInfo.imageType = VK_IMAGE_TYPE_2D;
+            imageInfo.extent.width = width;
+            imageInfo.extent.height = height;
+            imageInfo.extent.depth = 1;
+            imageInfo.mipLevels = 1;
+            imageInfo.arrayLayers = 1;
+            imageInfo.format = format;
+            imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+            imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            imageInfo.usage = usage;
+            imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+            if (vkCreateImage(m_Device, &imageInfo, nullptr, &attachment.image) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Error creando imagen para framebuffer");
+            }
+
+            // Allocar memoria
+            VkMemoryRequirements memReqs;
+            vkGetImageMemoryRequirements(m_Device, attachment.image, &memReqs);
+
+            VkMemoryAllocateInfo allocInfo{};
+            allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+            allocInfo.allocationSize = memReqs.size;
+            allocInfo.memoryTypeIndex = FindMemoryType(
+                memReqs.memoryTypeBits,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+            if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &attachment.memory) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Error allocando memoria para framebuffer");
+            }
+
+            vkBindImageMemory(m_Device, attachment.image, attachment.memory, 0);
+
+            // Crear image view
+            VkImageViewCreateInfo viewInfo{};
+            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            viewInfo.image = attachment.image;
+            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            viewInfo.format = format;
+            viewInfo.subresourceRange.aspectMask = aspectMask;
+            viewInfo.subresourceRange.baseMipLevel = 0;
+            viewInfo.subresourceRange.levelCount = 1;
+            viewInfo.subresourceRange.baseArrayLayer = 0;
+            viewInfo.subresourceRange.layerCount = 1;
+
+            if (vkCreateImageView(m_Device, &viewInfo, nullptr, &attachment.view) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Error creando image view para framebuffer");
+            }
+        }
+
+        void DestroyFramebufferAttachment(FramebufferAttachment &attachment)
+        {
+            if (attachment.view)
+            {
+                vkDestroyImageView(m_Device, attachment.view, nullptr);
+                attachment.view = VK_NULL_HANDLE;
+            }
+
+            if (attachment.image)
+            {
+                vkDestroyImage(m_Device, attachment.image, nullptr);
+                attachment.image = VK_NULL_HANDLE;
+            }
+
+            if (attachment.memory)
+            {
+                vkFreeMemory(m_Device, attachment.memory, nullptr);
+                attachment.memory = VK_NULL_HANDLE;
+            }
+        }
+
+        void CreateFramebufferRenderPass(std::shared_ptr<Framebuffer> fb)
+        {
+            std::vector<VkAttachmentDescription> attachments;
+
+            // Color attachment
+            VkAttachmentDescription colorAttachment{};
+            colorAttachment.format = fb->colorAttachment.format;
+            colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+            colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            attachments.push_back(colorAttachment);
+
+            VkAttachmentReference colorRef{};
+            colorRef.attachment = 0;
+            colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+            VkAttachmentReference depthRef{};
+
+            // Depth attachment (opcional)
+            if (fb->hasDepth)
+            {
+                VkAttachmentDescription depthAttachment{};
+                depthAttachment.format = fb->depthAttachment.format;
+                depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+                depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+                attachments.push_back(depthAttachment);
+
+                depthRef.attachment = 1;
+                depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            }
+
+            VkSubpassDescription subpass{};
+            subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            subpass.colorAttachmentCount = 1;
+            subpass.pColorAttachments = &colorRef;
+            subpass.pDepthStencilAttachment = fb->hasDepth ? &depthRef : nullptr;
+
+            // Dependencias para sincronización
+            std::array<VkSubpassDependency, 2> dependencies;
+
+            dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+            dependencies[0].dstSubpass = 0;
+            dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+            dependencies[1].srcSubpass = 0;
+            dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+            dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+            VkRenderPassCreateInfo renderPassInfo{};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+            renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            renderPassInfo.pAttachments = attachments.data();
+            renderPassInfo.subpassCount = 1;
+            renderPassInfo.pSubpasses = &subpass;
+            renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+            renderPassInfo.pDependencies = dependencies.data();
+
+            if (vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &fb->renderPass) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Error creando render pass para framebuffer");
+            }
+        }
+
+        void TransitionImageLayout(
+            VkCommandBuffer cmd,
+            VkImage image,
+            VkImageLayout oldLayout,
+            VkImageLayout newLayout,
+            VkImageAspectFlags aspectMask)
+        {
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = oldLayout;
+            barrier.newLayout = newLayout;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = image;
+            barrier.subresourceRange.aspectMask = aspectMask;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+
+            VkPipelineStageFlags srcStage;
+            VkPipelineStageFlags dstStage;
+
+            if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+                newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            {
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            }
+            else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL &&
+                     newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            {
+                barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            }
+            else
+            {
+                throw std::runtime_error("Transición de layout no soportada");
+            }
+
+            vkCmdPipelineBarrier(
+                cmd,
+                srcStage, dstStage,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &barrier);
+        }
 
         static std::vector<char> ReadFile(const std::string &filename)
         {
@@ -544,10 +971,6 @@ namespace Mantrax
 
             vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &cmd);
         }
-
-        // ====================================================================
-        // VULKAN INIT
-        // ====================================================================
 
         void InitVulkan()
         {
@@ -737,14 +1160,13 @@ namespace Mantrax
             ci.preTransform = caps.currentTransform;
             ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
-            // Modificar el Present Mode para habilitar o deshabilitar V-Sync
             if (enableVSync)
             {
-                ci.presentMode = VK_PRESENT_MODE_FIFO_KHR; // V-Sync habilitado
+                ci.presentMode = VK_PRESENT_MODE_FIFO_KHR;
             }
             else
             {
-                ci.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR; // V-Sync deshabilitado
+                ci.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
             }
 
             ci.clipped = VK_TRUE;
@@ -777,7 +1199,6 @@ namespace Mantrax
                 ci.subresourceRange.levelCount = 1;
                 ci.subresourceRange.baseArrayLayer = 0;
                 ci.subresourceRange.layerCount = 1;
-
                 if (vkCreateImageView(m_Device, &ci, nullptr, &m_SwapchainImageViews[i]) != VK_SUCCESS)
                     throw std::runtime_error("Error creando image view");
             }
@@ -808,7 +1229,6 @@ namespace Mantrax
         {
             m_DepthFormat = FindDepthFormat();
 
-            // Crear imagen de depth
             VkImageCreateInfo imageInfo{};
             imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
             imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -841,7 +1261,6 @@ namespace Mantrax
 
             vkBindImageMemory(m_Device, m_DepthImage, m_DepthImageMemory, 0);
 
-            // Crear image view
             VkImageViewCreateInfo viewInfo{};
             viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             viewInfo.image = m_DepthImage;
@@ -859,7 +1278,6 @@ namespace Mantrax
 
         void CreateRenderPass()
         {
-            // Color attachment
             VkAttachmentDescription colorAttachment{};
             colorAttachment.format = m_SwapchainImageFormat;
             colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -870,7 +1288,6 @@ namespace Mantrax
             colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-            // Depth attachment (NUEVO)
             VkAttachmentDescription depthAttachment{};
             depthAttachment.format = m_DepthFormat;
             depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -893,7 +1310,7 @@ namespace Mantrax
             subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
             subpass.colorAttachmentCount = 1;
             subpass.pColorAttachments = &colorRef;
-            subpass.pDepthStencilAttachment = &depthRef; // AÑADIR DEPTH
+            subpass.pDepthStencilAttachment = &depthRef;
 
             VkSubpassDependency dependency{};
             dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -923,15 +1340,19 @@ namespace Mantrax
 
         void CreateDescriptorPool()
         {
-            VkDescriptorPoolSize poolSize{};
-            poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            poolSize.descriptorCount = 1000;
+            std::array<VkDescriptorPoolSize, 2> poolSizes{};
+
+            poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            poolSizes[0].descriptorCount = 1000;
+
+            poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            poolSizes[1].descriptorCount = 1000;
 
             VkDescriptorPoolCreateInfo poolInfo{};
             poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-            poolInfo.poolSizeCount = 1;
-            poolInfo.pPoolSizes = &poolSize;
-            poolInfo.maxSets = 1000;
+            poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+            poolInfo.pPoolSizes = poolSizes.data();
+            poolInfo.maxSets = 2000;
 
             if (vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS)
                 throw std::runtime_error("Error creando descriptor pool");
@@ -945,13 +1366,12 @@ namespace Mantrax
             {
                 std::array<VkImageView, 2> attachments = {
                     m_SwapchainImageViews[i],
-                    m_DepthImageView // AÑADIR DEPTH VIEW
-                };
+                    m_DepthImageView};
 
                 VkFramebufferCreateInfo framebufferInfo{};
                 framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
                 framebufferInfo.renderPass = m_RenderPass;
-                framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+                framebufferInfo.attachmentCount = 2;
                 framebufferInfo.pAttachments = attachments.data();
                 framebufferInfo.width = m_SwapchainExtent.width;
                 framebufferInfo.height = m_SwapchainExtent.height;
@@ -962,6 +1382,7 @@ namespace Mantrax
                     throw std::runtime_error("Error creando framebuffer");
             }
         }
+
         void CreateCommandPool()
         {
             VkCommandPoolCreateInfo ci{};
@@ -1002,11 +1423,7 @@ namespace Mantrax
                 throw std::runtime_error("Error creando objetos de sincronización");
         }
 
-        // ====================================================================
-        // SHADER PIPELINE
-        // ====================================================================
-
-        void CreateShaderPipeline(std::shared_ptr<Shader> shader)
+        void CreateShaderPipeline(std::shared_ptr<Shader> shader, VkRenderPass renderPass = VK_NULL_HANDLE)
         {
             auto vertCode = ReadFile(shader->config.vertexShaderPath);
             auto fragCode = ReadFile(shader->config.fragmentShaderPath);
@@ -1127,7 +1544,7 @@ namespace Mantrax
             pi.pColorBlendState = &cb;
             pi.pDepthStencilState = &ds;
             pi.layout = shader->pipelineLayout;
-            pi.renderPass = m_RenderPass;
+            pi.renderPass = (renderPass != VK_NULL_HANDLE) ? renderPass : m_RenderPass;
             pi.subpass = 0;
 
             if (vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pi, nullptr, &shader->pipeline) != VK_SUCCESS)
@@ -1150,10 +1567,6 @@ namespace Mantrax
                 m_AllShaders.push_back(shader);
             }
         }
-
-        // ====================================================================
-        // BUFFERS
-        // ====================================================================
 
         void CreateVertexBuffer(std::shared_ptr<Mesh> mesh)
         {
@@ -1249,13 +1662,14 @@ namespace Mantrax
             vkUpdateDescriptorSets(m_Device, 1, &descriptorWrite, 0, nullptr);
         }
 
-        // ====================================================================
-        // RECORDING
-        // ====================================================================
-
         void RecordCommandBuffer(VkCommandBuffer cmd, uint32_t index,
                                  std::function<void(VkCommandBuffer)> imguiRenderCallback = nullptr)
         {
+            if (cmd == VK_NULL_HANDLE || index >= m_SwapchainFramebuffers.size())
+            {
+                throw std::runtime_error("Command buffer o índice inválido");
+            }
+
             VkCommandBufferBeginInfo beginInfo{};
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -1277,7 +1691,6 @@ namespace Mantrax
 
             vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-            // Renderizar objetos 3D
             for (const auto &obj : m_RenderObjects)
             {
                 if (!obj.mesh || !obj.material || !obj.material->shader)
@@ -1303,7 +1716,6 @@ namespace Mantrax
                 vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()), 1, 0, 0, 0);
             }
 
-            // ¡AQUÍ! Renderizar ImGui ANTES de terminar el render pass
             if (imguiRenderCallback)
             {
                 imguiRenderCallback(cmd);
@@ -1314,10 +1726,6 @@ namespace Mantrax
             if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
                 throw std::runtime_error("Error finalizando command buffer");
         }
-
-        // ====================================================================
-        // SWAPCHAIN RECREATE
-        // ====================================================================
 
         void CleanupSwapchain()
         {
@@ -1332,7 +1740,6 @@ namespace Mantrax
                                      m_CommandBuffers.data());
                 m_CommandBuffers.clear();
             }
-
             for (auto iv : m_SwapchainImageViews)
                 vkDestroyImageView(m_Device, iv, nullptr);
             m_SwapchainImageViews.clear();
@@ -1388,6 +1795,13 @@ namespace Mantrax
 
             m_SwapchainExtent.width = width;
             m_SwapchainExtent.height = height;
+            for (auto &obj : m_RenderObjects)
+            {
+                if (obj.material && obj.material->descriptorSet != VK_NULL_HANDLE)
+                {
+                    obj.material->descriptorSet = VK_NULL_HANDLE;
+                }
+            }
 
             CleanupSwapchain();
 
@@ -1419,44 +1833,18 @@ namespace Mantrax
                 }
 
                 CreateShaderPipeline(shader);
+            }
 
-                for (auto &obj : m_RenderObjects)
+            for (auto &obj : m_RenderObjects)
+            {
+                if (obj.material && obj.material->shader)
                 {
-                    if (obj.material && obj.material->shader == shader)
-                    {
-                        VkDescriptorSetAllocateInfo allocInfo{};
-                        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-                        allocInfo.descriptorPool = m_DescriptorPool;
-                        allocInfo.descriptorSetCount = 1;
-                        allocInfo.pSetLayouts = &shader->descriptorSetLayout;
-
-                        vkAllocateDescriptorSets(m_Device, &allocInfo, &obj.material->descriptorSet);
-
-                        VkDescriptorBufferInfo bufferInfo{};
-                        bufferInfo.buffer = obj.material->uniformBuffer;
-                        bufferInfo.offset = 0;
-                        bufferInfo.range = sizeof(UniformBufferObject);
-
-                        VkWriteDescriptorSet descriptorWrite{};
-                        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                        descriptorWrite.dstSet = obj.material->descriptorSet;
-                        descriptorWrite.dstBinding = 0;
-                        descriptorWrite.dstArrayElement = 0;
-                        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                        descriptorWrite.descriptorCount = 1;
-                        descriptorWrite.pBufferInfo = &bufferInfo;
-
-                        vkUpdateDescriptorSets(m_Device, 1, &descriptorWrite, 0, nullptr);
-                    }
+                    CreateDescriptorSet(obj.material);
                 }
             }
 
             m_NeedCommandBufferRebuild = true;
         }
-
-        // ====================================================================
-        // CLEANUP
-        // ====================================================================
 
         void Cleanup()
         {
@@ -1527,4 +1915,4 @@ namespace Mantrax
             m_Instance = VK_NULL_HANDLE;
         }
     };
-} // namespace Mantrax
+}
