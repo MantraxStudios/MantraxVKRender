@@ -4,14 +4,14 @@ layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec3 fragNormal;
 layout(location = 3) in vec3 fragWorldPos;
-layout(location = 4) in vec3 fragBarycentric;  // NUEVO: coordenadas baricéntricas
+layout(location = 4) in vec3 fragBarycentric;
 
 layout(location = 0) out vec4 outColor;
 
 // Parámetros de wireframe
-const float wireframeThickness = 1.0;  // Grosor de las líneas
-const vec3 wireframeColor = vec3(0.0, 0.0, 0.0);  // Color negro para las líneas
-const bool showSolidWithWireframe = true;  // true = modelo sólido con líneas, false = solo líneas
+const float wireframeThickness = 1.0;
+const vec3 wireframeColor = vec3(0.0, 0.0, 0.0);
+const bool showSolidWithWireframe = true;
 
 // Parámetros de iluminación mejorados
 const vec3 lightPos = vec3(5.0, 5.0, 5.0);
@@ -22,7 +22,7 @@ const vec3 camPos = vec3(0.0, 0.0, 3.0);
 
 const vec3 ambientSkyColor = vec3(0.6, 0.7, 0.9);
 const vec3 ambientGroundColor = vec3(0.4, 0.35, 0.3);
-const float ambientIntensity = 0.2;
+const float ambientIntensity = 0.5;
 
 const float metallic = 0.0;
 const float roughness = 0.6;
@@ -88,9 +88,20 @@ void main() {
     if (showSolidWithWireframe) {
         // Modo: modelo sólido con wireframe
         
-        // Normalizar normal
+        // Normalizar y asegurar que la normal esté orientada hacia la cámara
         vec3 N = normalize(fragNormal);
         vec3 V = normalize(camPos - fragWorldPos);
+        
+        // Si la normal apunta hacia atrás, invertirla (fix para triángulos negros)
+        // Hacer que todas las normales apunten hacia la cámara
+        if (dot(N, V) < 0.0) {
+            N = -N;
+        }
+        
+        // También podemos usar gl_FrontFacing para double-sided lighting
+        if (!gl_FrontFacing) {
+            N = -N;
+        }
         
         // Color base
         vec3 albedo = pow(fragColor, vec3(2.2));
@@ -108,7 +119,7 @@ void main() {
         float attenuation = lightIntensity / (distance * distance);
         vec3 radiance = lightColor * attenuation;
         
-        // Productos punto
+        // Productos punto - asegurar valores positivos
         float NdotL = max(dot(N, L), 0.0);
         float NdotV = max(dot(N, V), EPSILON);
         float HdotV = max(dot(H, V), 0.0);
@@ -131,11 +142,14 @@ void main() {
         // Luz directa final
         vec3 Lo = (kD * albedo / PI + specular) * radiance * NdotL;
         
-        // Luz ambiente
+        // Luz ambiente - más fuerte para evitar zonas muy oscuras
         vec3 ambient = CalculateHemisphericAmbient(N, albedo) * ao;
         
         // Color final
         vec3 color = ambient + Lo;
+        
+        // Asegurar que no haya valores negativos
+        color = max(color, vec3(0.0));
         
         // Exposure control
         float exposure = 1.5;
@@ -153,7 +167,7 @@ void main() {
         if (edge < 0.5) {
             outColor = vec4(wireframeColor, 1.0);
         } else {
-            discard;  // Descarta fragmentos que no son bordes
+            discard;
         }
     }
 }

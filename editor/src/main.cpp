@@ -315,6 +315,13 @@ int main()
         bool escPressed = false;
         bool oPressed = false;
 
+        auto offscreen = gfx.CreateOffscreenFramebuffer(1024, 768);
+
+        std::vector<Mantrax::RenderObject> objects;
+        objects.push_back(normalObj);
+        objects.push_back(outlineObj);
+        bool offscreenRegistered = false;
+
         while (running)
         {
             if (!window.ProcessMessages())
@@ -456,6 +463,8 @@ int main()
             CopyMat4(ubo.view, camera.GetViewMatrix());
             CopyMat4(ubo.projection, camera.GetProjectionMatrix());
 
+            gfx.RenderToOffscreenFramebuffer(offscreen, objects);
+
             if (window.WasFramebufferResized())
             {
                 uint32_t w, h;
@@ -471,6 +480,16 @@ int main()
 
             gfx.UpdateMaterialUBO(normalMaterial.get(), ubo);
             gfx.UpdateMaterialUBO(outlineMaterial.get(), ubo);
+
+            if (!offscreenRegistered)
+            {
+                offscreen->imguiTextureID = ImGui_ImplVulkan_AddTexture(
+                    offscreen->sampler,
+                    offscreen->colorImageView,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+                offscreenRegistered = true;
+            }
 
             imgui.BeginFrame();
 
@@ -502,6 +521,10 @@ int main()
                         (int)camera.GetPosition().x,
                         (int)camera.GetPosition().y,
                         (int)camera.GetPosition().z);
+
+            ImGui::Image(
+                offscreen->imguiTextureID,
+                ImVec2(256, 256));
 
             ImGui::End();
 

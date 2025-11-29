@@ -158,31 +158,62 @@ namespace Mantrax
         VkClearColorValue clearColor = {0.0f, 0.0f, 0.1f, 1.0f};
     };
 
-    struct FramebufferAttachment
-    {
-        VkImage image = VK_NULL_HANDLE;
-        VkDeviceMemory memory = VK_NULL_HANDLE;
-        VkImageView view = VK_NULL_HANDLE;
-        VkFormat format;
-        VkImageUsageFlags usage;
-        uint32_t width;
-        uint32_t height;
-    };
-
-    class Framebuffer
+    class OffscreenFramebuffer
     {
     public:
+        VkImage colorImage = VK_NULL_HANDLE;
+        VkDeviceMemory colorMemory = VK_NULL_HANDLE;
+        VkImageView colorImageView = VK_NULL_HANDLE;
+
+        VkImage depthImage = VK_NULL_HANDLE;
+        VkDeviceMemory depthMemory = VK_NULL_HANDLE;
+        VkImageView depthImageView = VK_NULL_HANDLE;
+
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         VkRenderPass renderPass = VK_NULL_HANDLE;
 
-        FramebufferAttachment colorAttachment;
-        FramebufferAttachment depthAttachment;
+        VkDescriptorSet imguiTextureID = VK_NULL_HANDLE;
+        VkSampler sampler = VK_NULL_HANDLE;
 
-        uint32_t width = 0;
-        uint32_t height = 0;
-        bool hasDepth = false;
+        VkExtent2D extent = {0, 0};
+        VkFormat colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+        VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
 
-        Framebuffer() = default;
+        OffscreenFramebuffer() = default;
+    };
+
+    struct RenderPassConfig
+    {
+        struct AttachmentConfig
+        {
+            VkFormat format;
+            VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+            VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            VkImageLayout finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            bool isDepth = false;
+        };
+
+        std::vector<AttachmentConfig> attachments;
+        std::string name; // Para debug/identificación
+
+        // Configuración de subpass
+        std::vector<uint32_t> colorAttachmentIndices;
+        int32_t depthAttachmentIndex = -1;
+    };
+
+    // NUEVA: Clase para manejar un render pass y sus framebuffers asociados
+    class RenderPassObject
+    {
+    public:
+        VkRenderPass renderPass = VK_NULL_HANDLE;
+        std::vector<VkFramebuffer> framebuffers;
+        RenderPassConfig config;
+        VkExtent2D extent;
+
+        RenderPassObject() = default;
+        RenderPassObject(const RenderPassConfig &cfg) : config(cfg) {}
     };
 
     class GFX
@@ -229,6 +260,361 @@ namespace Mantrax
             Cleanup();
         }
 
+        std::shared_ptr<OffscreenFramebuffer> CreateOffscreenFramebuffer(uint32_t width, uint32_t height)
+        {
+            auto offscreen = std::make_shared<OffscreenFramebuffer>();
+            offscreen->extent = {width, height};
+            offscreen->colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+            offscreen->depthFormat = m_DepthFormat;
+
+            // Crear color image con los usage flags correctos
+            CreateImage(width, height, offscreen->colorFormat,
+                        VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        offscreen->colorImage, offscreen->colorMemory);
+
+            offscreen->colorImageView = CreateImageView(offscreen->colorImage,
+                                                        offscreen->colorFormat,
+                                                        VK_IMAGE_ASPECT_COLOR_BIT);
+
+            // Crear depth image
+            CreateImage(width, height, offscreen->depthFormat,
+                        VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        offscreen->depthImage, offscreen->depthMemory);
+
+            offscreen->depthImageView = CreateImageView(offscreen->depthImage,
+                                                        offscreen->depthFormat,
+                                                        VK_IMAGE_ASPECT_DEPTH_BIT);
+
+            // Crear render pass
+            offscreen->renderPass = CreateOffscreenRenderPass(offscreen->colorFormat,
+                                                              offscreen->depthFormat);
+
+            // Crear framebuffer
+            std::array<VkImageView, 2> attachments = {
+                offscreen->colorImageView,
+                offscreen->depthImageView};
+
+            VkFramebufferCreateInfo fbInfo{};
+            fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            fbInfo.renderPass = offscreen->renderPass;
+            fbInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            fbInfo.pAttachments = attachments.data();
+            fbInfo.width = width;
+            fbInfo.height = height;
+            fbInfo.layers = 1;
+
+            if (vkCreateFramebuffer(m_Device, &fbInfo, nullptr, &offscreen->framebuffer) != VK_SUCCESS)
+                throw std::runtime_error("Error creando offscreen framebuffer");
+
+            // Crear sampler
+            VkSamplerCreateInfo samplerInfo{};
+            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            samplerInfo.magFilter = VK_FILTER_LINEAR;
+            samplerInfo.minFilter = VK_FILTER_LINEAR;
+            samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerInfo.anisotropyEnable = VK_FALSE;
+            samplerInfo.maxAnisotropy = 1.0f;
+            samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+            samplerInfo.unnormalizedCoordinates = VK_FALSE;
+            samplerInfo.compareEnable = VK_FALSE;
+            samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+            if (vkCreateSampler(m_Device, &samplerInfo, nullptr, &offscreen->sampler) != VK_SUCCESS)
+                throw std::runtime_error("Error creando sampler");
+
+            // CORRECCIÓN: Transicionar directamente a SHADER_READ_ONLY sin pasar por render
+            // La primera vez que se use para render, se hará la transición correcta
+            VkCommandBuffer cmd = BeginSingleTimeCommands();
+
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = offscreen->colorImage;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            vkCmdPipelineBarrier(
+                cmd,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &barrier);
+
+            EndSingleTimeCommands(cmd);
+
+            std::cout << "Offscreen framebuffer creado: " << width << "x" << height << "\n";
+
+            return offscreen;
+        }
+
+        void ResizeOffscreenFramebuffer(std::shared_ptr<OffscreenFramebuffer> offscreen,
+                                        uint32_t width, uint32_t height)
+        {
+            if (offscreen->extent.width == width && offscreen->extent.height == height)
+                return;
+
+            vkDeviceWaitIdle(m_Device);
+
+            // Limpiar recursos anteriores
+            if (offscreen->framebuffer != VK_NULL_HANDLE)
+                vkDestroyFramebuffer(m_Device, offscreen->framebuffer, nullptr);
+            if (offscreen->colorImageView != VK_NULL_HANDLE)
+                vkDestroyImageView(m_Device, offscreen->colorImageView, nullptr);
+            if (offscreen->colorImage != VK_NULL_HANDLE)
+                vkDestroyImage(m_Device, offscreen->colorImage, nullptr);
+            if (offscreen->colorMemory != VK_NULL_HANDLE)
+                vkFreeMemory(m_Device, offscreen->colorMemory, nullptr);
+            if (offscreen->depthImageView != VK_NULL_HANDLE)
+                vkDestroyImageView(m_Device, offscreen->depthImageView, nullptr);
+            if (offscreen->depthImage != VK_NULL_HANDLE)
+                vkDestroyImage(m_Device, offscreen->depthImage, nullptr);
+            if (offscreen->depthMemory != VK_NULL_HANDLE)
+                vkFreeMemory(m_Device, offscreen->depthMemory, nullptr);
+
+            // Reinicializar handles
+            offscreen->framebuffer = VK_NULL_HANDLE;
+            offscreen->colorImageView = VK_NULL_HANDLE;
+            offscreen->colorImage = VK_NULL_HANDLE;
+            offscreen->colorMemory = VK_NULL_HANDLE;
+            offscreen->depthImageView = VK_NULL_HANDLE;
+            offscreen->depthImage = VK_NULL_HANDLE;
+            offscreen->depthMemory = VK_NULL_HANDLE;
+
+            // Recrear con nuevo tamaño
+            offscreen->extent = {width, height};
+
+            CreateImage(width, height, offscreen->colorFormat,
+                        VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        offscreen->colorImage, offscreen->colorMemory);
+
+            offscreen->colorImageView = CreateImageView(offscreen->colorImage,
+                                                        offscreen->colorFormat,
+                                                        VK_IMAGE_ASPECT_COLOR_BIT);
+
+            CreateImage(width, height, offscreen->depthFormat,
+                        VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        offscreen->depthImage, offscreen->depthMemory);
+
+            offscreen->depthImageView = CreateImageView(offscreen->depthImage,
+                                                        offscreen->depthFormat,
+                                                        VK_IMAGE_ASPECT_DEPTH_BIT);
+
+            std::array<VkImageView, 2> attachments = {
+                offscreen->colorImageView,
+                offscreen->depthImageView};
+
+            VkFramebufferCreateInfo fbInfo{};
+            fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            fbInfo.renderPass = offscreen->renderPass;
+            fbInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            fbInfo.pAttachments = attachments.data();
+            fbInfo.width = width;
+            fbInfo.height = height;
+            fbInfo.layers = 1;
+
+            if (vkCreateFramebuffer(m_Device, &fbInfo, nullptr, &offscreen->framebuffer) != VK_SUCCESS)
+                throw std::runtime_error("Error recreando offscreen framebuffer");
+
+            // Transicionar la nueva imagen
+            VkCommandBuffer cmd = BeginSingleTimeCommands();
+
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = offscreen->colorImage;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            vkCmdPipelineBarrier(
+                cmd,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &barrier);
+
+            EndSingleTimeCommands(cmd);
+
+            std::cout << "Offscreen framebuffer redimensionado: " << width << "x" << height << "\n";
+        }
+
+        void RenderToOffscreenFramebuffer(std::shared_ptr<OffscreenFramebuffer> offscreen,
+                                          const std::vector<RenderObject> &objects,
+                                          const VkClearColorValue &clearColor = {0.0f, 0.0f, 0.1f, 1.0f})
+        {
+            VkCommandBuffer cmd = BeginSingleTimeCommands();
+
+            // Transición: SHADER_READ_ONLY -> COLOR_ATTACHMENT
+            VkImageMemoryBarrier barrier1{};
+            barrier1.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier1.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier1.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            barrier1.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier1.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier1.image = offscreen->colorImage;
+            barrier1.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier1.subresourceRange.baseMipLevel = 0;
+            barrier1.subresourceRange.levelCount = 1;
+            barrier1.subresourceRange.baseArrayLayer = 0;
+            barrier1.subresourceRange.layerCount = 1;
+            barrier1.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            barrier1.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+            vkCmdPipelineBarrier(
+                cmd,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &barrier1);
+
+            // Comenzar render pass
+            std::array<VkClearValue, 2> clearValues{};
+            clearValues[0].color = clearColor;
+            clearValues[1].depthStencil = {1.0f, 0};
+
+            VkRenderPassBeginInfo renderPassInfo{};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderPassInfo.renderPass = offscreen->renderPass;
+            renderPassInfo.framebuffer = offscreen->framebuffer;
+            renderPassInfo.renderArea.offset = {0, 0};
+            renderPassInfo.renderArea.extent = offscreen->extent;
+            renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+            renderPassInfo.pClearValues = clearValues.data();
+
+            vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+            // Viewport y scissor
+            VkViewport viewport{};
+            viewport.x = 0.0f;
+            viewport.y = 0.0f;
+            viewport.width = static_cast<float>(offscreen->extent.width);
+            viewport.height = static_cast<float>(offscreen->extent.height);
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+            vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+            VkRect2D scissor{};
+            scissor.offset = {0, 0};
+            scissor.extent = offscreen->extent;
+            vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+            // Renderizar objetos
+            for (const auto &obj : objects)
+            {
+                if (!obj.mesh || !obj.material || !obj.material->shader)
+                    continue;
+
+                if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
+                    continue;
+
+                if (!obj.material->shader->pipeline)
+                    continue;
+
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  obj.material->shader->pipeline);
+
+                VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
+                VkDeviceSize offsets[] = {0};
+                vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+                vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        obj.material->shader->pipelineLayout,
+                                        0, 1, &obj.material->descriptorSet, 0, nullptr);
+
+                vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()),
+                                 1, 0, 0, 0);
+            }
+
+            vkCmdEndRenderPass(cmd);
+
+            // Transición: COLOR_ATTACHMENT -> SHADER_READ_ONLY
+            VkImageMemoryBarrier barrier2{};
+            barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier2.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            barrier2.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier2.image = offscreen->colorImage;
+            barrier2.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier2.subresourceRange.baseMipLevel = 0;
+            barrier2.subresourceRange.levelCount = 1;
+            barrier2.subresourceRange.baseArrayLayer = 0;
+            barrier2.subresourceRange.layerCount = 1;
+            barrier2.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            barrier2.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            vkCmdPipelineBarrier(
+                cmd,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &barrier2);
+
+            EndSingleTimeCommands(cmd);
+        }
+
+        void DestroyOffscreenFramebuffer(std::shared_ptr<OffscreenFramebuffer> offscreen)
+        {
+            if (!offscreen)
+                return;
+
+            vkDeviceWaitIdle(m_Device);
+
+            if (offscreen->sampler)
+                vkDestroySampler(m_Device, offscreen->sampler, nullptr);
+            if (offscreen->framebuffer)
+                vkDestroyFramebuffer(m_Device, offscreen->framebuffer, nullptr);
+            if (offscreen->colorImageView)
+                vkDestroyImageView(m_Device, offscreen->colorImageView, nullptr);
+            if (offscreen->colorImage)
+                vkDestroyImage(m_Device, offscreen->colorImage, nullptr);
+            if (offscreen->colorMemory)
+                vkFreeMemory(m_Device, offscreen->colorMemory, nullptr);
+            if (offscreen->depthImageView)
+                vkDestroyImageView(m_Device, offscreen->depthImageView, nullptr);
+            if (offscreen->depthImage)
+                vkDestroyImage(m_Device, offscreen->depthImage, nullptr);
+            if (offscreen->depthMemory)
+                vkFreeMemory(m_Device, offscreen->depthMemory, nullptr);
+            if (offscreen->renderPass)
+                vkDestroyRenderPass(m_Device, offscreen->renderPass, nullptr);
+        }
+
         std::shared_ptr<Shader> CreateShader(const ShaderConfig &config)
         {
             auto shader = std::make_shared<Shader>(config);
@@ -253,37 +639,269 @@ namespace Mantrax
             return material;
         }
 
-        std::shared_ptr<Shader> CreateShaderForFramebuffer(
-            const ShaderConfig &config,
-            std::shared_ptr<Framebuffer> framebuffer)
+        std::shared_ptr<RenderPassObject> CreateRenderPass(const RenderPassConfig &config)
+        {
+            auto renderPassObj = std::make_shared<RenderPassObject>(config);
+            renderPassObj->extent = m_SwapchainExtent;
+
+            // Crear attachments descriptions
+            std::vector<VkAttachmentDescription> attachments;
+            for (const auto &attCfg : config.attachments)
+            {
+                VkAttachmentDescription att{};
+                att.format = attCfg.format;
+                att.samples = attCfg.samples;
+                att.loadOp = attCfg.loadOp;
+                att.storeOp = attCfg.storeOp;
+                att.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                att.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                att.initialLayout = attCfg.initialLayout;
+                att.finalLayout = attCfg.finalLayout;
+                attachments.push_back(att);
+            }
+
+            // Referencias a attachments para el subpass
+            std::vector<VkAttachmentReference> colorRefs;
+            for (uint32_t idx : config.colorAttachmentIndices)
+            {
+                VkAttachmentReference ref{};
+                ref.attachment = idx;
+                ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                colorRefs.push_back(ref);
+            }
+
+            VkAttachmentReference depthRef{};
+            bool hasDepth = config.depthAttachmentIndex >= 0;
+            if (hasDepth)
+            {
+                depthRef.attachment = config.depthAttachmentIndex;
+                depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            }
+
+            // Configurar subpass
+            VkSubpassDescription subpass{};
+            subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            subpass.colorAttachmentCount = static_cast<uint32_t>(colorRefs.size());
+            subpass.pColorAttachments = colorRefs.data();
+            subpass.pDepthStencilAttachment = hasDepth ? &depthRef : nullptr;
+
+            // Dependencia del subpass
+            VkSubpassDependency dependency{};
+            dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+            dependency.dstSubpass = 0;
+            dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            dependency.srcAccessMask = 0;
+            dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+            if (hasDepth)
+            {
+                dependency.srcStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+                dependency.dstStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+                dependency.dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            }
+
+            // Crear render pass
+            VkRenderPassCreateInfo renderPassInfo{};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+            renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+            renderPassInfo.pAttachments = attachments.data();
+            renderPassInfo.subpassCount = 1;
+            renderPassInfo.pSubpasses = &subpass;
+            renderPassInfo.dependencyCount = 1;
+            renderPassInfo.pDependencies = &dependency;
+
+            if (vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &renderPassObj->renderPass) != VK_SUCCESS)
+                throw std::runtime_error("Error creando render pass personalizado: " + config.name);
+
+            // Guardar en la lista
+            m_CustomRenderPasses.push_back(renderPassObj);
+
+            std::cout << "Render Pass '" << config.name << "' creado exitosamente\n";
+
+            return renderPassObj;
+        }
+
+        void CreateFramebuffersForRenderPass(std::shared_ptr<RenderPassObject> renderPassObj,
+                                             const std::vector<VkImageView> &additionalAttachments = {})
+        {
+            renderPassObj->framebuffers.resize(m_SwapchainImageViews.size());
+
+            for (size_t i = 0; i < m_SwapchainImageViews.size(); ++i)
+            {
+                std::vector<VkImageView> attachments;
+
+                // Agregar swapchain image view (normalmente el color attachment)
+                attachments.push_back(m_SwapchainImageViews[i]);
+
+                // Agregar attachments adicionales (ej: depth)
+                for (const auto &att : additionalAttachments)
+                {
+                    attachments.push_back(att);
+                }
+
+                VkFramebufferCreateInfo framebufferInfo{};
+                framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+                framebufferInfo.renderPass = renderPassObj->renderPass;
+                framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+                framebufferInfo.pAttachments = attachments.data();
+                framebufferInfo.width = renderPassObj->extent.width;
+                framebufferInfo.height = renderPassObj->extent.height;
+                framebufferInfo.layers = 1;
+
+                if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr,
+                                        &renderPassObj->framebuffers[i]) != VK_SUCCESS)
+                    throw std::runtime_error("Error creando framebuffer para: " + renderPassObj->config.name);
+            }
+
+            std::cout << "Framebuffers creados para '" << renderPassObj->config.name << "'\n";
+        }
+
+        std::shared_ptr<Shader> CreateShaderWithRenderPass(const ShaderConfig &config,
+                                                           std::shared_ptr<RenderPassObject> renderPassObj)
         {
             auto shader = std::make_shared<Shader>(config);
-            CreateShaderPipeline(shader, framebuffer->renderPass);
+            CreateShaderPipeline(shader, renderPassObj->renderPass);
             return shader;
         }
 
-        // Recrear shaders para un framebuffer después de resize
-        void RecreateShaderForFramebuffer(
-            std::shared_ptr<Shader> shader,
-            std::shared_ptr<Framebuffer> framebuffer)
+        void BeginRenderPassInCommandBuffer(VkCommandBuffer cmd,
+                                            std::shared_ptr<RenderPassObject> renderPassObj,
+                                            uint32_t framebufferIndex,
+                                            const std::vector<VkClearValue> &clearValues)
         {
-            if (shader->pipeline != VK_NULL_HANDLE)
+            if (framebufferIndex >= renderPassObj->framebuffers.size())
+                throw std::runtime_error("Índice de framebuffer inválido");
+
+            VkRenderPassBeginInfo renderPassInfo{};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderPassInfo.renderPass = renderPassObj->renderPass;
+            renderPassInfo.framebuffer = renderPassObj->framebuffers[framebufferIndex];
+            renderPassInfo.renderArea.offset = {0, 0};
+            renderPassInfo.renderArea.extent = renderPassObj->extent;
+            renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+            renderPassInfo.pClearValues = clearValues.data();
+
+            vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        }
+
+        // Dibujar con un render pass específico
+        void DrawFrameWithRenderPass(std::shared_ptr<RenderPassObject> renderPassObj,
+                                     const std::vector<RenderObject> &objects,
+                                     const std::vector<VkClearValue> &clearValues,
+                                     std::function<void(VkCommandBuffer)> additionalCommands = nullptr)
+        {
+            if (m_Device == VK_NULL_HANDLE || m_Swapchain == VK_NULL_HANDLE)
+                return;
+
+            vkWaitForFences(m_Device, 1, &m_InFlightFence, VK_TRUE, UINT64_MAX);
+
+            uint32_t imageIndex;
+            VkResult res = vkAcquireNextImageKHR(
+                m_Device, m_Swapchain, UINT64_MAX,
+                m_ImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+            if (res == VK_ERROR_OUT_OF_DATE_KHR)
             {
-                vkDestroyPipeline(m_Device, shader->pipeline, nullptr);
-                shader->pipeline = VK_NULL_HANDLE;
-            }
-            if (shader->pipelineLayout != VK_NULL_HANDLE)
-            {
-                vkDestroyPipelineLayout(m_Device, shader->pipelineLayout, nullptr);
-                shader->pipelineLayout = VK_NULL_HANDLE;
-            }
-            if (shader->descriptorSetLayout != VK_NULL_HANDLE)
-            {
-                vkDestroyDescriptorSetLayout(m_Device, shader->descriptorSetLayout, nullptr);
-                shader->descriptorSetLayout = VK_NULL_HANDLE;
+                RecreateSwapchain();
+                return;
             }
 
-            CreateShaderPipeline(shader, framebuffer->renderPass);
+            vkResetFences(m_Device, 1, &m_InFlightFence);
+
+            // Usar un command buffer temporal
+            VkCommandBuffer cmd = m_CommandBuffers[imageIndex];
+            vkResetCommandBuffer(cmd, 0);
+
+            VkCommandBufferBeginInfo beginInfo{};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            vkBeginCommandBuffer(cmd, &beginInfo);
+
+            // Comenzar render pass personalizado
+            VkRenderPassBeginInfo renderPassInfo{};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderPassInfo.renderPass = renderPassObj->renderPass;
+            renderPassInfo.framebuffer = renderPassObj->framebuffers[imageIndex];
+            renderPassInfo.renderArea.offset = {0, 0};
+            renderPassInfo.renderArea.extent = renderPassObj->extent;
+            renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+            renderPassInfo.pClearValues = clearValues.data();
+
+            vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+            // Dibujar objetos
+            for (const auto &obj : objects)
+            {
+                if (!obj.mesh || !obj.material || !obj.material->shader)
+                    continue;
+
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.material->shader->pipeline);
+
+                VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
+                VkDeviceSize offsets[] = {0};
+                vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+                vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        obj.material->shader->pipelineLayout,
+                                        0, 1, &obj.material->descriptorSet, 0, nullptr);
+
+                vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()), 1, 0, 0, 0);
+            }
+
+            // Comandos adicionales (ej: ImGui)
+            if (additionalCommands)
+            {
+                additionalCommands(cmd);
+            }
+
+            vkCmdEndRenderPass(cmd);
+            vkEndCommandBuffer(cmd);
+
+            // Submit y present
+            VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            VkSubmitInfo si{};
+            si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            si.waitSemaphoreCount = 1;
+            si.pWaitSemaphores = &m_ImageAvailableSemaphore;
+            si.pWaitDstStageMask = &waitStage;
+            si.commandBufferCount = 1;
+            si.pCommandBuffers = &cmd;
+            si.signalSemaphoreCount = 1;
+            si.pSignalSemaphores = &m_RenderFinishedSemaphore;
+
+            vkQueueSubmit(m_GraphicsQueue, 1, &si, m_InFlightFence);
+
+            VkPresentInfoKHR pi{};
+            pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            pi.waitSemaphoreCount = 1;
+            pi.pWaitSemaphores = &m_RenderFinishedSemaphore;
+            pi.swapchainCount = 1;
+            pi.pSwapchains = &m_Swapchain;
+            pi.pImageIndices = &imageIndex;
+
+            vkQueuePresentKHR(m_PresentQueue, &pi);
+        }
+
+        // Limpiar render passes personalizados
+        void CleanupCustomRenderPasses()
+        {
+            for (auto &rp : m_CustomRenderPasses)
+            {
+                for (auto fb : rp->framebuffers)
+                {
+                    if (fb != VK_NULL_HANDLE)
+                        vkDestroyFramebuffer(m_Device, fb, nullptr);
+                }
+                rp->framebuffers.clear();
+
+                if (rp->renderPass != VK_NULL_HANDLE)
+                {
+                    vkDestroyRenderPass(m_Device, rp->renderPass, nullptr);
+                    rp->renderPass = VK_NULL_HANDLE;
+                }
+            }
+            m_CustomRenderPasses.clear();
         }
 
         void AddRenderObject(const RenderObject &obj)
@@ -310,172 +928,6 @@ namespace Mantrax
         void NotifyFramebufferResized()
         {
             m_FramebufferResized = true;
-        }
-
-        std::shared_ptr<Framebuffer> CreateFramebuffer(
-            uint32_t width,
-            uint32_t height,
-            VkFormat colorFormat = VK_FORMAT_R8G8B8A8_UNORM,
-            bool withDepth = true,
-            VkImageUsageFlags additionalUsage = 0)
-        {
-            auto fb = std::make_shared<Framebuffer>();
-            fb->width = width;
-            fb->height = height;
-            fb->hasDepth = withDepth;
-
-            // Crear color attachment
-            CreateFramebufferAttachment(
-                fb->colorAttachment,
-                width, height,
-                colorFormat,
-                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | additionalUsage,
-                VK_IMAGE_ASPECT_COLOR_BIT);
-
-            // Crear depth attachment si se requiere
-            if (withDepth)
-            {
-                CreateFramebufferAttachment(
-                    fb->depthAttachment,
-                    width, height,
-                    m_DepthFormat,
-                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                    VK_IMAGE_ASPECT_DEPTH_BIT);
-            }
-
-            // Crear render pass para el framebuffer
-            CreateFramebufferRenderPass(fb);
-
-            // Crear el framebuffer
-            std::vector<VkImageView> attachments;
-            attachments.push_back(fb->colorAttachment.view);
-
-            if (withDepth)
-            {
-                attachments.push_back(fb->depthAttachment.view);
-            }
-
-            VkFramebufferCreateInfo framebufferInfo{};
-            framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            framebufferInfo.renderPass = fb->renderPass;
-            framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-            framebufferInfo.pAttachments = attachments.data();
-            framebufferInfo.width = width;
-            framebufferInfo.height = height;
-            framebufferInfo.layers = 1;
-
-            if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &fb->framebuffer) != VK_SUCCESS)
-            {
-                throw std::runtime_error("Error creando framebuffer offscreen");
-            }
-
-            return fb;
-        }
-
-        void DestroyFramebuffer(std::shared_ptr<Framebuffer> fb)
-        {
-            if (!fb)
-                return;
-
-            vkDeviceWaitIdle(m_Device);
-
-            if (fb->framebuffer)
-            {
-                vkDestroyFramebuffer(m_Device, fb->framebuffer, nullptr);
-            }
-
-            if (fb->renderPass)
-            {
-                vkDestroyRenderPass(m_Device, fb->renderPass, nullptr);
-            }
-
-            DestroyFramebufferAttachment(fb->colorAttachment);
-
-            if (fb->hasDepth)
-            {
-                DestroyFramebufferAttachment(fb->depthAttachment);
-            }
-        }
-
-        // Renderizar a un framebuffer específico
-        void RenderToFramebuffer(
-            std::shared_ptr<Framebuffer> fb,
-            std::function<void(VkCommandBuffer)> renderCallback,
-            VkClearColorValue clearColor = {0.0f, 0.0f, 0.0f, 1.0f})
-        {
-            if (!fb || !fb->framebuffer)
-                return;
-
-            VkCommandBufferAllocateInfo allocInfo{};
-            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            allocInfo.commandPool = m_CommandPool;
-            allocInfo.commandBufferCount = 1;
-
-            VkCommandBuffer cmd;
-            vkAllocateCommandBuffers(m_Device, &allocInfo, &cmd);
-
-            VkCommandBufferBeginInfo beginInfo{};
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-            vkBeginCommandBuffer(cmd, &beginInfo);
-
-            // Transición de layout para el color attachment
-            TransitionImageLayout(
-                cmd,
-                fb->colorAttachment.image,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_IMAGE_ASPECT_COLOR_BIT);
-
-            std::array<VkClearValue, 2> clearValues{};
-            clearValues[0].color = clearColor;
-            clearValues[1].depthStencil = {1.0f, 0};
-
-            VkRenderPassBeginInfo renderPassInfo{};
-            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            renderPassInfo.renderPass = fb->renderPass;
-            renderPassInfo.framebuffer = fb->framebuffer;
-            renderPassInfo.renderArea.offset = {0, 0};
-            renderPassInfo.renderArea.extent = {fb->width, fb->height};
-            renderPassInfo.clearValueCount = fb->hasDepth ? 2 : 1;
-            renderPassInfo.pClearValues = clearValues.data();
-
-            vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-            // Ejecutar callback de renderizado
-            if (renderCallback)
-            {
-                renderCallback(cmd);
-            }
-
-            vkCmdEndRenderPass(cmd);
-
-            // Transición a shader read para poder usar como textura
-            TransitionImageLayout(
-                cmd,
-                fb->colorAttachment.image,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                VK_IMAGE_ASPECT_COLOR_BIT);
-
-            vkEndCommandBuffer(cmd);
-
-            VkSubmitInfo submitInfo{};
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &cmd;
-
-            vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-            vkQueueWaitIdle(m_GraphicsQueue);
-
-            vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &cmd);
-        }
-
-        VkImageView GetFramebufferColorView(std::shared_ptr<Framebuffer> fb)
-        {
-            return fb ? fb->colorAttachment.view : VK_NULL_HANDLE;
         }
 
         bool DrawFrame(std::function<void(VkCommandBuffer)> imguiRenderCallback = nullptr)
@@ -596,6 +1048,18 @@ namespace Mantrax
         VkExtent2D GetSwapchainExtent() const { return m_SwapchainExtent; }
         VkRenderPass GetRenderPass() const { return m_RenderPass; }
         uint32_t GetGraphicsQueueFamily() const { return m_GraphicsQueueFamily; }
+        VkFormat GetSwapchainImageFormat() const { return m_SwapchainImageFormat; }
+        VkFormat GetDepthFormat() const { return m_DepthFormat; }
+        VkImageView GetDepthImageView() const { return m_DepthImageView; }
+
+        // Getters adicionales para rendering manual
+        VkSwapchainKHR GetSwapchain() const { return m_Swapchain; }
+        const VkSemaphore &GetImageAvailableSemaphoreRef() const { return m_ImageAvailableSemaphore; }
+        const VkSemaphore &GetRenderFinishedSemaphoreRef() const { return m_RenderFinishedSemaphore; }
+        const VkFence &GetInFlightFenceRef() const { return m_InFlightFence; }
+        VkQueue GetPresentQueue() const { return m_PresentQueue; }
+        VkCommandBuffer GetCommandBuffer(uint32_t index) const { return m_CommandBuffers[index]; }
+        VkFramebuffer GetFramebuffer(uint32_t index) const { return m_SwapchainFramebuffers[index]; }
 
         GFX(const GFX &) = delete;
         GFX &operator=(const GFX &) = delete;
@@ -625,6 +1089,7 @@ namespace Mantrax
         VkExtent2D m_SwapchainExtent;
         std::vector<VkImage> m_SwapchainImages;
         std::vector<VkImageView> m_SwapchainImageViews;
+        std::vector<std::shared_ptr<RenderPassObject>> m_CustomRenderPasses;
 
         VkRenderPass m_RenderPass;
 
@@ -643,20 +1108,24 @@ namespace Mantrax
 
         std::vector<std::shared_ptr<Shader>> m_AllShaders;
 
-        void CreateFramebufferAttachment(
-            FramebufferAttachment &attachment,
-            uint32_t width,
-            uint32_t height,
-            VkFormat format,
-            VkImageUsageFlags usage,
-            VkImageAspectFlags aspectMask)
+        static std::vector<char> ReadFile(const std::string &filename)
         {
-            attachment.format = format;
-            attachment.usage = usage;
-            attachment.width = width;
-            attachment.height = height;
+            std::ifstream file(filename, std::ios::binary | std::ios::ate);
+            if (!file)
+                throw std::runtime_error("No se pudo abrir: " + filename);
 
-            // Crear imagen
+            size_t size = (size_t)file.tellg();
+            std::vector<char> buffer(size);
+            file.seekg(0);
+            file.read(buffer.data(), size);
+            return buffer;
+        }
+
+        void CreateImage(uint32_t width, uint32_t height, VkFormat format,
+                         VkImageTiling tiling, VkImageUsageFlags usage,
+                         VkMemoryPropertyFlags properties,
+                         VkImage &image, VkDeviceMemory &memory)
+        {
             VkImageCreateInfo imageInfo{};
             imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
             imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -666,81 +1135,54 @@ namespace Mantrax
             imageInfo.mipLevels = 1;
             imageInfo.arrayLayers = 1;
             imageInfo.format = format;
-            imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+            imageInfo.tiling = tiling;
             imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             imageInfo.usage = usage;
             imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
             imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-            if (vkCreateImage(m_Device, &imageInfo, nullptr, &attachment.image) != VK_SUCCESS)
-            {
-                throw std::runtime_error("Error creando imagen para framebuffer");
-            }
+            if (vkCreateImage(m_Device, &imageInfo, nullptr, &image) != VK_SUCCESS)
+                throw std::runtime_error("Error creando imagen");
 
-            // Allocar memoria
             VkMemoryRequirements memReqs;
-            vkGetImageMemoryRequirements(m_Device, attachment.image, &memReqs);
+            vkGetImageMemoryRequirements(m_Device, image, &memReqs);
 
             VkMemoryAllocateInfo allocInfo{};
             allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
             allocInfo.allocationSize = memReqs.size;
-            allocInfo.memoryTypeIndex = FindMemoryType(
-                memReqs.memoryTypeBits,
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+            allocInfo.memoryTypeIndex = FindMemoryType(memReqs.memoryTypeBits, properties);
 
-            if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &attachment.memory) != VK_SUCCESS)
-            {
-                throw std::runtime_error("Error allocando memoria para framebuffer");
-            }
+            if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &memory) != VK_SUCCESS)
+                throw std::runtime_error("Error allocando memoria de imagen");
 
-            vkBindImageMemory(m_Device, attachment.image, attachment.memory, 0);
+            vkBindImageMemory(m_Device, image, memory, 0);
+        }
 
-            // Crear image view
+        VkImageView CreateImageView(VkImage image, VkFormat format,
+                                    VkImageAspectFlags aspectFlags)
+        {
             VkImageViewCreateInfo viewInfo{};
             viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            viewInfo.image = attachment.image;
+            viewInfo.image = image;
             viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
             viewInfo.format = format;
-            viewInfo.subresourceRange.aspectMask = aspectMask;
+            viewInfo.subresourceRange.aspectMask = aspectFlags;
             viewInfo.subresourceRange.baseMipLevel = 0;
             viewInfo.subresourceRange.levelCount = 1;
             viewInfo.subresourceRange.baseArrayLayer = 0;
             viewInfo.subresourceRange.layerCount = 1;
 
-            if (vkCreateImageView(m_Device, &viewInfo, nullptr, &attachment.view) != VK_SUCCESS)
-            {
-                throw std::runtime_error("Error creando image view para framebuffer");
-            }
+            VkImageView imageView;
+            if (vkCreateImageView(m_Device, &viewInfo, nullptr, &imageView) != VK_SUCCESS)
+                throw std::runtime_error("Error creando image view");
+
+            return imageView;
         }
 
-        void DestroyFramebufferAttachment(FramebufferAttachment &attachment)
+        VkRenderPass CreateOffscreenRenderPass(VkFormat colorFormat, VkFormat depthFormat)
         {
-            if (attachment.view)
-            {
-                vkDestroyImageView(m_Device, attachment.view, nullptr);
-                attachment.view = VK_NULL_HANDLE;
-            }
-
-            if (attachment.image)
-            {
-                vkDestroyImage(m_Device, attachment.image, nullptr);
-                attachment.image = VK_NULL_HANDLE;
-            }
-
-            if (attachment.memory)
-            {
-                vkFreeMemory(m_Device, attachment.memory, nullptr);
-                attachment.memory = VK_NULL_HANDLE;
-            }
-        }
-
-        void CreateFramebufferRenderPass(std::shared_ptr<Framebuffer> fb)
-        {
-            std::vector<VkAttachmentDescription> attachments;
-
-            // Color attachment
             VkAttachmentDescription colorAttachment{};
-            colorAttachment.format = fb->colorAttachment.format;
+            colorAttachment.format = colorFormat;
             colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
             colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -748,39 +1190,31 @@ namespace Mantrax
             colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
             colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            attachments.push_back(colorAttachment);
+
+            VkAttachmentDescription depthAttachment{};
+            depthAttachment.format = depthFormat;
+            depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+            depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
             VkAttachmentReference colorRef{};
             colorRef.attachment = 0;
             colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
             VkAttachmentReference depthRef{};
-
-            // Depth attachment (opcional)
-            if (fb->hasDepth)
-            {
-                VkAttachmentDescription depthAttachment{};
-                depthAttachment.format = fb->depthAttachment.format;
-                depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-                depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-                depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-                depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-                depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-                attachments.push_back(depthAttachment);
-
-                depthRef.attachment = 1;
-                depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            }
+            depthRef.attachment = 1;
+            depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
             VkSubpassDescription subpass{};
             subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
             subpass.colorAttachmentCount = 1;
             subpass.pColorAttachments = &colorRef;
-            subpass.pDepthStencilAttachment = fb->hasDepth ? &depthRef : nullptr;
+            subpass.pDepthStencilAttachment = &depthRef;
 
-            // Dependencias para sincronización
             std::array<VkSubpassDependency, 2> dependencies;
 
             dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -799,6 +1233,8 @@ namespace Mantrax
             dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
             dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
+            std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
+
             VkRenderPassCreateInfo renderPassInfo{};
             renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
             renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
@@ -808,18 +1244,58 @@ namespace Mantrax
             renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
             renderPassInfo.pDependencies = dependencies.data();
 
-            if (vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &fb->renderPass) != VK_SUCCESS)
-            {
-                throw std::runtime_error("Error creando render pass para framebuffer");
-            }
+            VkRenderPass renderPass;
+            if (vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS)
+                throw std::runtime_error("Error creando offscreen render pass");
+
+            return renderPass;
         }
 
-        void TransitionImageLayout(
-            VkCommandBuffer cmd,
-            VkImage image,
-            VkImageLayout oldLayout,
-            VkImageLayout newLayout,
-            VkImageAspectFlags aspectMask)
+        VkCommandBuffer BeginSingleTimeCommands()
+        {
+            VkCommandBufferAllocateInfo allocInfo{};
+            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocInfo.commandPool = m_CommandPool;
+            allocInfo.commandBufferCount = 1;
+
+            VkCommandBuffer cmd;
+            vkAllocateCommandBuffers(m_Device, &allocInfo, &cmd);
+
+            VkCommandBufferBeginInfo beginInfo{};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+            vkBeginCommandBuffer(cmd, &beginInfo);
+
+            return cmd;
+        }
+
+        void EndSingleTimeCommands(VkCommandBuffer cmd)
+        {
+            vkEndCommandBuffer(cmd);
+
+            VkSubmitInfo submitInfo{};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &cmd;
+
+            vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_GraphicsQueue);
+
+            vkFreeCommandBuffers(m_Device, m_CommandPool, 1, &cmd);
+        }
+
+        void TransitionImageLayout(VkImage image, VkFormat format,
+                                   VkImageLayout oldLayout, VkImageLayout newLayout)
+        {
+            VkCommandBuffer cmd = BeginSingleTimeCommands();
+            TransitionImageLayoutCmd(cmd, image, format, oldLayout, newLayout);
+            EndSingleTimeCommands(cmd);
+        }
+
+        void TransitionImageLayoutCmd(VkCommandBuffer cmd, VkImage image, VkFormat format,
+                                      VkImageLayout oldLayout, VkImageLayout newLayout)
         {
             VkImageMemoryBarrier barrier{};
             barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -828,7 +1304,7 @@ namespace Mantrax
             barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             barrier.image = image;
-            barrier.subresourceRange.aspectMask = aspectMask;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             barrier.subresourceRange.baseMipLevel = 0;
             barrier.subresourceRange.levelCount = 1;
             barrier.subresourceRange.baseArrayLayer = 0;
@@ -838,11 +1314,19 @@ namespace Mantrax
             VkPipelineStageFlags dstStage;
 
             if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
-                newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+                newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
             {
                 barrier.srcAccessMask = 0;
-                barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
                 srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            }
+            else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
+                     newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            {
+                barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                srcStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
                 dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             }
             else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL &&
@@ -855,29 +1339,11 @@ namespace Mantrax
             }
             else
             {
-                throw std::runtime_error("Transición de layout no soportada");
+                throw std::invalid_argument("Transición de layout no soportada");
             }
 
-            vkCmdPipelineBarrier(
-                cmd,
-                srcStage, dstStage,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &barrier);
-        }
-
-        static std::vector<char> ReadFile(const std::string &filename)
-        {
-            std::ifstream file(filename, std::ios::binary | std::ios::ate);
-            if (!file)
-                throw std::runtime_error("No se pudo abrir: " + filename);
-
-            size_t size = (size_t)file.tellg();
-            std::vector<char> buffer(size);
-            file.seekg(0);
-            file.read(buffer.data(), size);
-            return buffer;
+            vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, 0, nullptr, 0, nullptr,
+                                 1, &barrier);
         }
 
         VkShaderModule CreateShaderModule(const std::vector<char> &code)
@@ -1773,6 +2239,55 @@ namespace Mantrax
             }
         }
 
+        void RecreateSwapchainWithCustomRenderPasses()
+        {
+            if (m_Device == VK_NULL_HANDLE)
+                return;
+
+            vkDeviceWaitIdle(m_Device);
+
+            // Guardar configuraciones de render passes
+            std::vector<std::shared_ptr<RenderPassObject>> oldRenderPasses = m_CustomRenderPasses;
+
+            // Limpiar
+            CleanupSwapchain();
+            CleanupCustomRenderPasses();
+
+            // Recrear swapchain base
+            CreateSwapchain(false);
+            CreateImageViews();
+            CreateDepthResources();
+            CreateRenderPass();
+            CreateFramebuffers();
+            CreateCommandBuffers();
+
+            // Recrear render passes personalizados
+            for (auto &oldRP : oldRenderPasses)
+            {
+                auto newRP = CreateRenderPass(oldRP->config);
+                newRP->extent = m_SwapchainExtent;
+
+                // Recrear framebuffers (necesitarás adaptar esto según tus attachments)
+                CreateFramebuffersForRenderPass(newRP, {m_DepthImageView});
+            }
+
+            // Recrear pipelines
+            auto shadersToRecreate = m_AllShaders;
+            for (auto &shader : shadersToRecreate)
+            {
+                if (shader->pipeline != VK_NULL_HANDLE)
+                    vkDestroyPipeline(m_Device, shader->pipeline, nullptr);
+                if (shader->pipelineLayout != VK_NULL_HANDLE)
+                    vkDestroyPipelineLayout(m_Device, shader->pipelineLayout, nullptr);
+                if (shader->descriptorSetLayout != VK_NULL_HANDLE)
+                    vkDestroyDescriptorSetLayout(m_Device, shader->descriptorSetLayout, nullptr);
+
+                CreateShaderPipeline(shader);
+            }
+
+            m_NeedCommandBufferRebuild = true;
+        }
+
         void RecreateSwapchain()
         {
             if (m_Device == VK_NULL_HANDLE)
@@ -1795,6 +2310,10 @@ namespace Mantrax
 
             m_SwapchainExtent.width = width;
             m_SwapchainExtent.height = height;
+
+            // NUEVO: Limpiar render passes personalizados primero
+            CleanupCustomRenderPasses();
+
             for (auto &obj : m_RenderObjects)
             {
                 if (obj.material && obj.material->descriptorSet != VK_NULL_HANDLE)
@@ -1811,6 +2330,8 @@ namespace Mantrax
             CreateRenderPass();
             CreateFramebuffers();
             CreateCommandBuffers();
+
+            std::vector<RenderPassConfig> savedConfigs;
 
             auto shadersToRecreate = m_AllShaders;
 
@@ -1886,6 +2407,14 @@ namespace Mantrax
                 if (shader->descriptorSetLayout)
                     vkDestroyDescriptorSetLayout(m_Device, shader->descriptorSetLayout, nullptr);
             }
+
+            if (m_Device == VK_NULL_HANDLE && m_Instance == VK_NULL_HANDLE)
+                return;
+
+            if (m_Device != VK_NULL_HANDLE)
+                vkDeviceWaitIdle(m_Device);
+
+            CleanupCustomRenderPasses();
 
             if (m_InFlightFence)
                 vkDestroyFence(m_Device, m_InFlightFence, nullptr);

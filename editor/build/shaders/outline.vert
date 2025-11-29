@@ -11,13 +11,18 @@ layout(location = 1) in vec3 inNormal;
 
 void main()
 {
-    float outlineWidth = 0.03;
+    // Ancho del outline reducido para mejor visualización
+    float outlineWidth = 0.015;
 
-    vec4 viewPos = ubo.view * ubo.model * vec4(inPosition, 1.0);
-
-    vec3 viewNormal = normalize(mat3(ubo.view * ubo.model) * inNormal);
-
-    viewPos.xyz += viewNormal * outlineWidth;
-
-    gl_Position = ubo.projection * viewPos;
+    // Transformar posición al espacio mundial
+    vec4 worldPos = ubo.model * vec4(inPosition, 1.0);
+    
+    // Transformar normal al espacio mundial y normalizar
+    vec3 worldNormal = normalize(mat3(ubo.model) * inNormal);
+    
+    // Extruir en el espacio mundial (más estable que en view space)
+    worldPos.xyz += worldNormal * outlineWidth;
+    
+    // Transformar al clip space
+    gl_Position = ubo.projection * ubo.view * worldPos;
 }
