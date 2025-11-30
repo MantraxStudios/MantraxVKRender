@@ -1,12 +1,17 @@
 #pragma once
+#include "IService.h"
 #include "UIBehaviour.h"
-#include <iostream>
 #include <vector>
 
-class UIRender
+class UIRender : public IService
 {
 public:
     std::vector<UIBehaviour *> _Renders;
+
+    std::string getName() override
+    {
+        return "UIRender";
+    }
 
     void Set(UIBehaviour *render)
     {
@@ -15,9 +20,8 @@ public:
 
     UIBehaviour *Get(int index)
     {
-        if (index < 0 || index >= static_cast<int>(_Renders.size()))
+        if (index < 0 || index >= (int)_Renders.size())
             return nullptr;
-
         return _Renders[index];
     }
 
@@ -28,12 +32,10 @@ public:
 
     void RenderAll()
     {
-        for (auto render : _Renders)
+        for (auto &r : _Renders)
         {
-            if (render && render->isOpen)
-            {
-                render->OnRender();
-            }
+            if (r && r->isOpen)
+                r->OnRender();
         }
     }
 };

@@ -10,24 +10,20 @@ class ServiceLocator
 private:
     std::unordered_map<std::string, std::shared_ptr<IService>> services;
 
-    // Constructor privado (singleton)
     ServiceLocator() = default;
 
 public:
-    // Obtener instancia global
     static ServiceLocator &instance()
     {
         static ServiceLocator inst;
         return inst;
     }
 
-    // Registrar un servicio
     void registerService(const std::string &name, std::shared_ptr<IService> service)
     {
         services[name] = service;
     }
 
-    // Obtener un servicio
     template <typename T>
     std::shared_ptr<T> get(const std::string &name)
     {

@@ -80,9 +80,8 @@ namespace Mantrax
             return true;
         }
 
-        // No permitir copia
-        WindowMainPlug(const WindowMainPlug &) = delete;
-        WindowMainPlug &operator=(const WindowMainPlug &) = delete;
+        WindowMainPlug(WindowMainPlug &&) noexcept;
+        WindowMainPlug &operator=(WindowMainPlug &&) noexcept;
 
     private:
         HINSTANCE m_hInstance;

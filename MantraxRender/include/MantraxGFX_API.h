@@ -1061,8 +1061,8 @@ namespace Mantrax
         VkCommandBuffer GetCommandBuffer(uint32_t index) const { return m_CommandBuffers[index]; }
         VkFramebuffer GetFramebuffer(uint32_t index) const { return m_SwapchainFramebuffers[index]; }
 
-        GFX(const GFX &) = delete;
-        GFX &operator=(const GFX &) = delete;
+        GFX(const GFX &) noexcept;
+        GFX &operator=(const GFX &) noexcept;
 
     private:
         Config m_Config;

@@ -1,6 +1,10 @@
 #include "../MantraxRender/include/MainWinPlug.h"
 #include "../MantraxRender/include/MantraxGFX_API.h"
 #include "../includes/FPSCamera.h"
+#include "../includes/EngineLoader.h"
+#include "../includes/UIRender.h"
+#include "../includes/ui/SceneView.h"
+#include "../includes/ServiceLocator.h"
 #include "../includes/MinecraftChunk.h"
 #include "../includes/ImGuiManager.h"
 #include <glm/glm.hpp>
@@ -186,53 +190,15 @@ int main()
 
     try
     {
-        std::cout << "=== Mantrax Engine - Minecraft FPS Camera + Toon Outline ===\n\n";
+        ServiceLocator::instance().registerService(
+            "EngineLoader",
+            std::make_shared<EngineLoader>());
 
-        std::cout << "Creando ventana...\n";
-        Mantrax::WindowConfig windowConfig;
-        windowConfig.width = 1920;
-        windowConfig.height = 1080;
-        windowConfig.title = "Mantrax Engine - Toon Outline";
-        windowConfig.resizable = true;
+        auto loader = ServiceLocator::instance().get<EngineLoader>("EngineLoader");
+        loader->Start(hInst, CustomWndProc);
 
-        Mantrax::WindowMainPlug window(hInst, windowConfig);
-        window.SetCustomWndProc(CustomWndProc);
-        std::cout << "Ventana creada\n\n";
+        Mantrax::ImGuiManager imgui(loader->window->GetHWND(), loader->gfx.get());
 
-        std::cout << "Inicializando GFX...\n";
-        Mantrax::GFXConfig gfxConfig;
-        gfxConfig.clearColor = {0.53f, 0.81f, 0.92f, 1.0f};
-
-        Mantrax::GFX gfx(hInst, window.GetHWND(), gfxConfig);
-        std::cout << "GFX inicializado\n\n";
-
-        std::cout << "Inicializando ImGui...\n";
-        Mantrax::ImGuiManager imgui(window.GetHWND(), &gfx);
-        std::cout << "ImGui inicializado\n\n";
-
-        std::cout << "Creando shaders...\n";
-
-        Mantrax::ShaderConfig normalShaderConfig;
-        normalShaderConfig.vertexShaderPath = "shaders/pbr.vert.spv";
-        normalShaderConfig.fragmentShaderPath = "shaders/pbr.frag.spv";
-        normalShaderConfig.vertexBinding = Mantrax::Vertex::GetBindingDescription();
-        normalShaderConfig.vertexAttributes = Mantrax::Vertex::GetAttributeDescriptions();
-        normalShaderConfig.cullMode = VK_CULL_MODE_BACK_BIT;
-        normalShaderConfig.depthTestEnable = true;
-        auto normalShader = gfx.CreateShader(normalShaderConfig);
-
-        Mantrax::ShaderConfig outlineShaderConfig;
-        outlineShaderConfig.vertexShaderPath = "shaders/outline.vert.spv";
-        outlineShaderConfig.fragmentShaderPath = "shaders/outline.frag.spv";
-        outlineShaderConfig.vertexBinding = Mantrax::Vertex::GetBindingDescription();
-        outlineShaderConfig.vertexAttributes = Mantrax::Vertex::GetAttributeDescriptions();
-        outlineShaderConfig.cullMode = VK_CULL_MODE_FRONT_BIT;
-        outlineShaderConfig.depthTestEnable = true;
-        auto outlineShader = gfx.CreateShader(outlineShaderConfig);
-
-        std::cout << "Shaders creados\n\n";
-
-        std::cout << "Generando terreno Minecraft...\n";
         auto startTime = std::chrono::high_resolution_clock::now();
 
         Mantrax::ChunkConfig chunkConfig;
@@ -254,20 +220,10 @@ int main()
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
 
-        std::cout << "Terreno generado en " << duration.count() << "ms\n";
-        std::cout << "  - Vertices: " << vertices.size() << "\n";
-        std::cout << "  - Indices: " << indices.size() << "\n";
-        std::cout << "  - Triangulos: " << indices.size() / 3 << "\n\n";
+        auto mesh = loader->gfx->CreateMesh(vertices, indices);
 
-        if (vertices.empty() || indices.empty())
-        {
-            throw std::runtime_error("Error: No se generaron vertices o indices");
-        }
-
-        auto mesh = gfx.CreateMesh(vertices, indices);
-
-        auto normalMaterial = gfx.CreateMaterial(normalShader);
-        auto outlineMaterial = gfx.CreateMaterial(outlineShader);
+        auto normalMaterial = loader->gfx->CreateMaterial(loader->normalShader);
+        auto outlineMaterial = loader->gfx->CreateMaterial(loader->outlineShader);
 
         std::cout << "Configurando camara FPS...\n";
         Mantrax::FPSCamera camera(glm::vec3(0.0f, 40.0f, 10.0f), 60.0f, 0.1f, 500.0f);
@@ -285,25 +241,14 @@ int main()
         CopyMat4(ubo.view, camera.GetViewMatrix());
         CopyMat4(ubo.projection, camera.GetProjectionMatrix());
 
-        gfx.UpdateMaterialUBO(normalMaterial.get(), ubo);
-        gfx.UpdateMaterialUBO(outlineMaterial.get(), ubo);
+        loader->gfx->UpdateMaterialUBO(normalMaterial.get(), ubo);
+        loader->gfx->UpdateMaterialUBO(outlineMaterial.get(), ubo);
 
         Mantrax::RenderObject outlineObj(mesh, outlineMaterial);
         Mantrax::RenderObject normalObj(mesh, normalMaterial);
 
-        gfx.AddRenderObject(outlineObj);
-        gfx.AddRenderObject(normalObj);
-
-        std::cout << "=== CONTROLES ===\n";
-        std::cout << "  - Click Izquierdo: Capturar mouse\n";
-        std::cout << "  - W/A/S/D: Movimiento\n";
-        std::cout << "  - Espacio/Ctrl: Subir/Bajar\n";
-        std::cout << "  - Shift: Sprint\n";
-        std::cout << "  - ESC: Liberar mouse\n";
-        std::cout << "  - R: Regenerar terreno\n";
-        std::cout << "  - O: Toggle Outline ON/OFF\n\n";
-
-        std::cout << "Iniciando loop de renderizado...\n\n";
+        loader->gfx->AddRenderObject(outlineObj);
+        loader->gfx->AddRenderObject(normalObj);
 
         DWORD lastTime = GetTickCount();
         int frameCount = 0;
@@ -315,16 +260,23 @@ int main()
         bool escPressed = false;
         bool oPressed = false;
 
-        auto offscreen = gfx.CreateOffscreenFramebuffer(1024, 768);
+        auto offscreen = loader->gfx->CreateOffscreenFramebuffer(1024, 768);
 
         std::vector<Mantrax::RenderObject> objects;
         objects.push_back(normalObj);
         objects.push_back(outlineObj);
         bool offscreenRegistered = false;
 
+        ServiceLocator::instance().registerService(
+            "UIRender",
+            std::make_shared<UIRender>());
+
+        auto uiRender = ServiceLocator::instance().get<UIRender>("UIRender");
+        uiRender->Set(new SceneView());
+
         while (running)
         {
-            if (!window.ProcessMessages())
+            if (!loader->window->ProcessMessages())
             {
                 running = false;
                 break;
@@ -354,17 +306,17 @@ int main()
                     oPressed = true;
                     g_OutlineEnabled = !g_OutlineEnabled;
 
-                    gfx.ClearRenderObjects();
+                    loader->gfx->ClearRenderObjects();
 
                     if (g_OutlineEnabled)
                     {
-                        gfx.AddRenderObject(outlineObj);
-                        gfx.AddRenderObject(normalObj);
+                        loader->gfx->AddRenderObject(outlineObj);
+                        loader->gfx->AddRenderObject(normalObj);
                         std::cout << "Outline ACTIVADO\n";
                     }
                     else
                     {
-                        gfx.AddRenderObject(normalObj);
+                        loader->gfx->AddRenderObject(normalObj);
                         std::cout << "Outline DESACTIVADO\n";
                     }
                 }
@@ -416,20 +368,20 @@ int main()
 
                     std::cout << "Terreno regenerado en " << regenDuration.count() << "ms\n\n";
 
-                    gfx.ClearRenderObjects();
-                    mesh = gfx.CreateMesh(vertices, indices);
+                    loader->gfx->ClearRenderObjects();
+                    mesh = loader->gfx->CreateMesh(vertices, indices);
 
                     outlineObj.mesh = mesh;
                     normalObj.mesh = mesh;
 
                     if (g_OutlineEnabled)
                     {
-                        gfx.AddRenderObject(outlineObj);
-                        gfx.AddRenderObject(normalObj);
+                        loader->gfx->AddRenderObject(outlineObj);
+                        loader->gfx->AddRenderObject(normalObj);
                     }
                     else
                     {
-                        gfx.AddRenderObject(normalObj);
+                        loader->gfx->AddRenderObject(normalObj);
                     }
                 }
             }
@@ -463,23 +415,23 @@ int main()
             CopyMat4(ubo.view, camera.GetViewMatrix());
             CopyMat4(ubo.projection, camera.GetProjectionMatrix());
 
-            gfx.RenderToOffscreenFramebuffer(offscreen, objects);
+            loader->gfx->RenderToOffscreenFramebuffer(offscreen, objects);
 
-            if (window.WasFramebufferResized())
+            if (loader->window->WasFramebufferResized())
             {
                 uint32_t w, h;
-                window.GetWindowSize(w, h);
+                loader->window->GetWindowSize(w, h);
                 float newAspect = (float)w / (float)h;
 
                 camera.SetAspectRatio(newAspect);
                 CopyMat4(ubo.projection, camera.GetProjectionMatrix());
 
-                gfx.NotifyFramebufferResized();
-                window.ResetFramebufferResizedFlag();
+                loader->gfx->NotifyFramebufferResized();
+                loader->window->ResetFramebufferResizedFlag();
             }
 
-            gfx.UpdateMaterialUBO(normalMaterial.get(), ubo);
-            gfx.UpdateMaterialUBO(outlineMaterial.get(), ubo);
+            loader->gfx->UpdateMaterialUBO(normalMaterial.get(), ubo);
+            loader->gfx->UpdateMaterialUBO(outlineMaterial.get(), ubo);
 
             if (!offscreenRegistered)
             {
@@ -492,6 +444,8 @@ int main()
             }
 
             imgui.BeginFrame();
+
+            uiRender->RenderAll();
 
             ImGui::Begin("Inspector", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -541,8 +495,8 @@ int main()
 
             ImGui::Render();
 
-            gfx.DrawFrame([](VkCommandBuffer cmd)
-                          { ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd); });
+            loader->gfx->DrawFrame([](VkCommandBuffer cmd)
+                                   { ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd); });
         }
 
         std::cout << "\nCerrando aplicacion...\n";
