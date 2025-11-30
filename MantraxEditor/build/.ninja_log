@@ -1,0 +1,10 @@
+# ninja log v7
+17	294	7862371020591062	CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_impl_vulkan.cpp.obj	424df547267b4d1b
+9	546	7862371020514726	CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_demo.cpp.obj	f93d500965e00816
+21	568	7862371020630952	CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_impl_win32.cpp.obj	7d5a16f4c6a582f
+25	669	7862371020676177	CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_tables.cpp.obj	a7d14048ae3c5181
+13	810	7862371020550027	CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_draw.cpp.obj	61e4b51476a640c3
+31	943	7862371020731619	CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_widgets.cpp.obj	ea9f208f85261fb4
+4	1387	7862371020470595	CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui.cpp.obj	43542e76da1ce1ba
+7	1709	7862372808039242	CMakeFiles/MantraxApp.dir/src/main.cpp.obj	5fe4ac7e2c066cbe
+1711	1878	7862372825082238	MantraxApp.exe	4c8b4ea8220e678d
