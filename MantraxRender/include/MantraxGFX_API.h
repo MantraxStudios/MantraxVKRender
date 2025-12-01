@@ -172,7 +172,7 @@ namespace Mantrax
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         VkRenderPass renderPass = VK_NULL_HANDLE;
 
-        VkDescriptorSet imguiTextureID = VK_NULL_HANDLE;
+        VkDescriptorSet renderID = VK_NULL_HANDLE;
         VkSampler sampler = VK_NULL_HANDLE;
 
         VkExtent2D extent = {0, 0};
@@ -469,8 +469,7 @@ namespace Mantrax
         }
 
         void RenderToOffscreenFramebuffer(std::shared_ptr<OffscreenFramebuffer> offscreen,
-                                          const std::vector<RenderObject> &objects,
-                                          const VkClearColorValue &clearColor = {0.6f, 0.6f, 0.8f, 1.0f})
+                                          const std::vector<RenderObject> &objects)
         {
             VkCommandBuffer cmd = BeginSingleTimeCommands();
 
@@ -501,7 +500,7 @@ namespace Mantrax
 
             // Comenzar render pass
             std::array<VkClearValue, 2> clearValues{};
-            clearValues[0].color = clearColor;
+            clearValues[0].color = m_Config.clearColor;
             clearValues[1].depthStencil = {1.0f, 0};
 
             VkRenderPassBeginInfo renderPassInfo{};

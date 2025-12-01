@@ -1,19 +1,16 @@
 #include "../MantraxRender/include/MainWinPlug.h"
 #include "../MantraxRender/include/MantraxGFX_API.h"
+#include "../MantraxRender/include/MantraxGFX_Timer.h"
 #include "../includes/FPSCamera.h"
 #include "../includes/EngineLoader.h"
 #include "../includes/UIRender.h"
 #include "../includes/ui/SceneView.h"
 #include "../includes/ServiceLocator.h"
-#include "../includes/MinecraftChunk.h"
 #include "../includes/ImGuiManager.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
-#include <chrono>
-
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 struct InputState
 {
@@ -32,11 +29,107 @@ struct InputState
 
 InputState g_Input;
 Mantrax::FPSCamera *g_Camera = nullptr;
-bool g_OutlineEnabled = true;
 
 void CopyMat4(float *dest, const glm::mat4 &src)
 {
     memcpy(dest, glm::value_ptr(src), 16 * sizeof(float));
+}
+
+// Función para crear vértices de un cubo
+void CreateCubeVertices(std::vector<Mantrax::Vertex> &vertices, std::vector<uint32_t> &indices)
+{
+    vertices.clear();
+    indices.clear();
+
+    // Vértices del cubo (8 vértices)
+    float positions[][3] = {
+        {-0.5f, -0.5f, -0.5f}, // 0
+        {0.5f, -0.5f, -0.5f},  // 1
+        {0.5f, 0.5f, -0.5f},   // 2
+        {-0.5f, 0.5f, -0.5f},  // 3
+        {-0.5f, -0.5f, 0.5f},  // 4
+        {0.5f, -0.5f, 0.5f},   // 5
+        {0.5f, 0.5f, 0.5f},    // 6
+        {-0.5f, 0.5f, 0.5f}    // 7
+    };
+
+    float normals[][3] = {
+        {0.0f, 0.0f, -1.0f}, // Frente
+        {0.0f, 0.0f, 1.0f},  // Atrás
+        {-1.0f, 0.0f, 0.0f}, // Izquierda
+        {1.0f, 0.0f, 0.0f},  // Derecha
+        {0.0f, -1.0f, 0.0f}, // Abajo
+        {0.0f, 1.0f, 0.0f}   // Arriba
+    };
+
+    float colors[][3] = {
+        {1.0f, 0.0f, 0.0f}, // Rojo
+        {0.0f, 1.0f, 0.0f}, // Verde
+        {0.0f, 0.0f, 1.0f}, // Azul
+        {1.0f, 1.0f, 0.0f}, // Amarillo
+        {1.0f, 0.0f, 1.0f}, // Magenta
+        {0.0f, 1.0f, 1.0f}  // Cyan
+    };
+
+    // Definir las 6 caras del cubo (cada cara con 4 vértices)
+    // IMPORTANTE: Orden corregido para que las normales apunten HACIA AFUERA
+    uint32_t faceIndices[][4] = {
+        {3, 2, 1, 0}, // Frente (invertido)
+        {4, 5, 6, 7}, // Atrás (invertido)
+        {7, 3, 0, 4}, // Izquierda (invertido)
+        {2, 6, 5, 1}, // Derecha (invertido)
+        {0, 1, 5, 4}, // Abajo (invertido)
+        {7, 6, 2, 3}  // Arriba (invertido)
+    };
+
+    // Coordenadas baricéntricas para los 3 vértices de un triángulo
+    float baryCoords[3][3] = {
+        {1.0f, 0.0f, 0.0f}, // Primer vértice
+        {0.0f, 1.0f, 0.0f}, // Segundo vértice
+        {0.0f, 0.0f, 1.0f}  // Tercer vértice
+    };
+
+    // Crear vértices para cada cara
+    for (int face = 0; face < 6; face++)
+    {
+        // Cada cara tiene 2 triángulos, necesitamos 6 vértices (no 4)
+        // Triángulo 1: vértices 0, 1, 2
+        // Triángulo 2: vértices 0, 2, 3
+
+        int triangleIndices[6] = {0, 1, 2, 0, 2, 3};
+        int baryIndices[6] = {0, 1, 2, 0, 1, 2}; // Coordenadas baricéntricas para cada vértice
+
+        for (int i = 0; i < 6; i++)
+        {
+            Mantrax::Vertex v;
+
+            // Copiar position
+            uint32_t posIdx = faceIndices[face][triangleIndices[i]];
+            memcpy(v.position, positions[posIdx], 3 * sizeof(float));
+
+            // Copiar normal
+            memcpy(v.normal, normals[face], 3 * sizeof(float));
+
+            // Copiar color
+            memcpy(v.color, colors[face], 3 * sizeof(float));
+
+            // Copiar texCoord
+            v.texCoord[0] = 0.0f;
+            v.texCoord[1] = 0.0f;
+
+            // Asignar coordenadas baricéntricas correctas
+            memcpy(v.barycentric, baryCoords[baryIndices[i]], 3 * sizeof(float));
+
+            vertices.push_back(v);
+        }
+
+        // Índices para dos triángulos por cara (ahora son secuenciales)
+        uint32_t baseIdx = face * 6;
+        for (uint32_t i = 0; i < 6; i++)
+        {
+            indices.push_back(baseIdx + i);
+        }
+    }
 }
 
 LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -199,81 +292,96 @@ int main()
 
         Mantrax::ImGuiManager imgui(loader->window->GetHWND(), loader->gfx.get());
 
-        auto startTime = std::chrono::high_resolution_clock::now();
+        // ============================================
+        // TIMER: Medir tiempo de generación del cubo
+        // ============================================
+        Mantrax::Timer generationTimer;
 
-        Mantrax::ChunkConfig chunkConfig;
-        chunkConfig.chunkSizeX = 64;
-        chunkConfig.chunkSizeY = 64;
-        chunkConfig.chunkSizeZ = 64;
-        chunkConfig.seed = 42;
-        chunkConfig.noiseScale = 0.06f;
-        chunkConfig.terrainHeight = 32.0f;
-        chunkConfig.terrainAmplitude = 14.0f;
-
-        Mantrax::MinecraftChunk chunk(chunkConfig);
-        chunk.GenerateTerrain();
-
+        // Crear geometría del cubo
         std::vector<Mantrax::Vertex> vertices;
         std::vector<uint32_t> indices;
-        chunk.BuildMesh(vertices, indices);
+        CreateCubeVertices(vertices, indices);
 
-        auto endTime = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+        generationTimer.Update();
+        float generationTime = generationTimer.GetTotalTime() * 1000.0f; // En milisegundos
+
+        std::cout << "Cubo generado en " << generationTime << "ms\n";
+        std::cout << "Vertices: " << vertices.size() << ", Indices: " << indices.size() << "\n\n";
 
         auto mesh = loader->gfx->CreateMesh(vertices, indices);
-
         auto normalMaterial = loader->gfx->CreateMaterial(loader->normalShader);
-        auto outlineMaterial = loader->gfx->CreateMaterial(loader->outlineShader);
 
         std::cout << "Configurando camara FPS...\n";
-        Mantrax::FPSCamera camera(glm::vec3(0.0f, 40.0f, 10.0f), 60.0f, 0.1f, 500.0f);
+        Mantrax::FPSCamera camera(glm::vec3(0.0f, 0.0f, 5.0f), 60.0f, 0.1f, 500.0f);
         camera.SetAspectRatio(1920.0f / 1080.0f);
-        camera.SetMovementSpeed(15.0f);
+        camera.SetMovementSpeed(5.0f);
         camera.SetMouseSensitivity(0.1f);
 
         g_Camera = &camera;
         std::cout << "Camara FPS configurada\n\n";
 
-        Mantrax::UniformBufferObject ubo{};
-        glm::mat4 model = glm::mat4(1.0f);
+        // Crear dos cubos con diferentes posiciones
+        glm::mat4 modelCubeArriba = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f));
+        glm::mat4 modelCubeAbajo = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f));
 
-        CopyMat4(ubo.model, model);
-        CopyMat4(ubo.view, camera.GetViewMatrix());
-        CopyMat4(ubo.projection, camera.GetProjectionMatrix());
+        Mantrax::UniformBufferObject uboArriba{};
+        Mantrax::UniformBufferObject uboAbajo{};
 
-        loader->gfx->UpdateMaterialUBO(normalMaterial.get(), ubo);
-        loader->gfx->UpdateMaterialUBO(outlineMaterial.get(), ubo);
+        // Escalar los cubos para verlos mejor
+        modelCubeArriba = glm::scale(modelCubeArriba, glm::vec3(2.0f));
+        modelCubeAbajo = glm::scale(modelCubeAbajo, glm::vec3(2.0f));
 
-        Mantrax::RenderObject outlineObj(mesh, outlineMaterial);
-        Mantrax::RenderObject normalObj(mesh, normalMaterial);
+        CopyMat4(uboArriba.model, modelCubeArriba);
+        CopyMat4(uboArriba.view, camera.GetViewMatrix());
+        CopyMat4(uboArriba.projection, camera.GetProjectionMatrix());
 
-        loader->gfx->AddRenderObject(outlineObj);
-        loader->gfx->AddRenderObject(normalObj);
+        CopyMat4(uboAbajo.model, modelCubeAbajo);
+        CopyMat4(uboAbajo.view, camera.GetViewMatrix());
+        CopyMat4(uboAbajo.projection, camera.GetProjectionMatrix());
 
-        DWORD lastTime = GetTickCount();
-        int frameCount = 0;
-        float totalTime = 0.0f;
-        float lastTimeForFPS = 0.0f;
-        int fps = 0;
+        // Materiales para cada cubo
+        auto normalMaterialArriba = loader->gfx->CreateMaterial(loader->normalShader);
+        auto normalMaterialAbajo = loader->gfx->CreateMaterial(loader->normalShader);
+
+        loader->gfx->UpdateMaterialUBO(normalMaterialArriba.get(), uboArriba);
+        loader->gfx->UpdateMaterialUBO(normalMaterialAbajo.get(), uboAbajo);
+
+        // Objetos de render
+        Mantrax::RenderObject normalObjArriba(mesh, normalMaterialArriba);
+        Mantrax::RenderObject normalObjAbajo(mesh, normalMaterialAbajo);
+
+        loader->gfx->AddRenderObject(normalObjArriba);
+        loader->gfx->AddRenderObject(normalObjAbajo);
+
+        // ============================================
+        // TIMER: Para el game loop
+        // ============================================
+        Mantrax::Timer gameTimer;
+
         bool running = true;
-        int currentSeed = chunkConfig.seed;
         bool escPressed = false;
-        bool oPressed = false;
 
         auto offscreen = loader->gfx->CreateOffscreenFramebuffer(1024, 768);
 
         std::vector<Mantrax::RenderObject> objects;
-        objects.push_back(normalObj);
-        objects.push_back(outlineObj);
-        bool offscreenRegistered = false;
+        objects.push_back(normalObjArriba);
+        objects.push_back(normalObjAbajo);
 
         ServiceLocator::instance().registerService(
             "UIRender",
             std::make_shared<UIRender>());
 
         auto uiRender = ServiceLocator::instance().get<UIRender>("UIRender");
-        uiRender->Set(new SceneView());
 
+        SceneView *renderView = new SceneView();
+        uiRender->Set(renderView);
+
+        auto uiRenderGet = ServiceLocator::instance().get<UIRender>("UIRender");
+        uiRenderGet->GetByType<SceneView>()->renderID = offscreen->renderID;
+
+        // ============================================
+        // GAME LOOP
+        // ============================================
         while (running)
         {
             if (!loader->window->ProcessMessages())
@@ -282,54 +390,17 @@ int main()
                 break;
             }
 
-            DWORD now = GetTickCount();
-            float delta = (now - lastTime) / 1000.0f;
-            lastTime = now;
+            // ============================================
+            // TIMER: Actualizar y obtener delta time + FPS
+            // ============================================
+            gameTimer.Update();
+            float delta = gameTimer.GetDeltaTime();
+            int fps = gameTimer.GetFPS();
 
-            if (delta > 0.1f)
-                delta = 0.1f;
-
-            totalTime += delta;
-            frameCount++;
-
-            if (totalTime - lastTimeForFPS >= 1.0f)
-            {
-                fps = frameCount;
-                frameCount = 0;
-                lastTimeForFPS = totalTime;
-            }
-
-            if (GetAsyncKeyState('O') & 0x8000)
-            {
-                if (!oPressed)
-                {
-                    oPressed = true;
-                    g_OutlineEnabled = !g_OutlineEnabled;
-
-                    loader->gfx->ClearRenderObjects();
-
-                    if (g_OutlineEnabled)
-                    {
-                        loader->gfx->AddRenderObject(outlineObj);
-                        loader->gfx->AddRenderObject(normalObj);
-                        std::cout << "Outline ACTIVADO\n";
-                    }
-                    else
-                    {
-                        loader->gfx->AddRenderObject(normalObj);
-                        std::cout << "Outline DESACTIVADO\n";
-                    }
-                }
-            }
-            else
-            {
-                oPressed = false;
-            }
-
+            // Input de cámara
             if (g_Input.mouseCapture)
             {
                 bool sprint = g_Input.keyShift;
-
                 if (g_Input.keyW)
                     camera.ProcessKeyboard(Mantrax::FORWARD, delta, sprint);
                 if (g_Input.keyS)
@@ -344,66 +415,14 @@ int main()
                     camera.ProcessKeyboard(Mantrax::DOWN, delta, sprint);
             }
 
-            if (GetAsyncKeyState('R') & 0x8000)
-            {
-                static bool rPressed = false;
-                if (!rPressed)
-                {
-                    rPressed = true;
-                    currentSeed++;
-
-                    std::cout << "\n=== REGENERANDO TERRENO (Seed: " << currentSeed << ") ===\n";
-                    auto regenStart = std::chrono::high_resolution_clock::now();
-
-                    chunkConfig.seed = currentSeed;
-                    chunk = Mantrax::MinecraftChunk(chunkConfig);
-                    chunk.GenerateTerrain();
-
-                    vertices.clear();
-                    indices.clear();
-                    chunk.BuildMesh(vertices, indices);
-
-                    auto regenEnd = std::chrono::high_resolution_clock::now();
-                    auto regenDuration = std::chrono::duration_cast<std::chrono::milliseconds>(regenEnd - regenStart);
-
-                    std::cout << "Terreno regenerado en " << regenDuration.count() << "ms\n\n";
-
-                    loader->gfx->ClearRenderObjects();
-                    mesh = loader->gfx->CreateMesh(vertices, indices);
-
-                    outlineObj.mesh = mesh;
-                    normalObj.mesh = mesh;
-
-                    if (g_OutlineEnabled)
-                    {
-                        loader->gfx->AddRenderObject(outlineObj);
-                        loader->gfx->AddRenderObject(normalObj);
-                    }
-                    else
-                    {
-                        loader->gfx->AddRenderObject(normalObj);
-                    }
-                }
-            }
-            else
-            {
-                static bool rPressed = true;
-                rPressed = false;
-            }
-
+            // ESC handling
             if (GetAsyncKeyState(VK_ESCAPE) & 0x8000)
             {
-                if (!g_Input.mouseCapture)
+                if (!g_Input.mouseCapture && !escPressed)
                 {
-                    if (!escPressed)
-                    {
-                        escPressed = true;
-                    }
-                    else
-                    {
-                        running = false;
-                        break;
-                    }
+                    escPressed = true;
+                    running = false;
+                    break;
                 }
             }
             else
@@ -411,88 +430,59 @@ int main()
                 escPressed = false;
             }
 
-            CopyMat4(ubo.model, model);
-            CopyMat4(ubo.view, camera.GetViewMatrix());
-            CopyMat4(ubo.projection, camera.GetProjectionMatrix());
-
-            loader->gfx->RenderToOffscreenFramebuffer(offscreen, objects);
-
-            if (loader->window->WasFramebufferResized())
+            if (renderView->CheckResize())
             {
-                uint32_t w, h;
-                loader->window->GetWindowSize(w, h);
-                float newAspect = (float)w / (float)h;
+                std::cout << "SceneView redimensionado: " << renderView->width << "x" << renderView->height << "\n";
 
-                camera.SetAspectRatio(newAspect);
-                CopyMat4(ubo.projection, camera.GetProjectionMatrix());
+                loader->gfx->ResizeOffscreenFramebuffer(
+                    offscreen,
+                    static_cast<uint32_t>(renderView->width),
+                    static_cast<uint32_t>(renderView->height));
 
-                loader->gfx->NotifyFramebufferResized();
-                loader->window->ResetFramebufferResizedFlag();
-            }
-
-            loader->gfx->UpdateMaterialUBO(normalMaterial.get(), ubo);
-            loader->gfx->UpdateMaterialUBO(outlineMaterial.get(), ubo);
-
-            if (!offscreenRegistered)
-            {
-                offscreen->imguiTextureID = ImGui_ImplVulkan_AddTexture(
+                // Actualizar el descriptor set
+                offscreen->renderID = ImGui_ImplVulkan_AddTexture(
                     offscreen->sampler,
                     offscreen->colorImageView,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-                offscreenRegistered = true;
+                renderView->renderID = offscreen->renderID;
+
+                // Actualizar aspect ratio de la cámara
+                float newAspect = static_cast<float>(renderView->width) /
+                                  static_cast<float>(renderView->height);
+                camera.SetAspectRatio(newAspect);
+
+                renderView->ResetResizeFlag();
             }
 
-            imgui.BeginFrame();
+            // Actualizar matrices de cámara
+            CopyMat4(uboArriba.model, modelCubeArriba);
+            CopyMat4(uboArriba.view, camera.GetViewMatrix());
+            CopyMat4(uboArriba.projection, camera.GetProjectionMatrix());
 
-            uiRender->RenderAll();
+            CopyMat4(uboAbajo.model, modelCubeAbajo);
+            CopyMat4(uboAbajo.view, camera.GetViewMatrix());
+            CopyMat4(uboAbajo.projection, camera.GetProjectionMatrix());
 
-            ImGui::Begin("Inspector", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+            // Renderizar a offscreen framebuffer
+            loader->gfx->RenderToOffscreenFramebuffer(offscreen, objects);
 
-            ImGui::Text("FPS: ");
-            ImGui::SameLine();
-            if (fps >= 60)
-                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "%d", fps);
-            else if (fps >= 30)
-                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%d", fps);
-            else
-                ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "%d", fps);
-
-            ImGui::Separator();
-
-            ImGui::Text("Outline: ");
-            ImGui::SameLine();
-            if (g_OutlineEnabled)
-                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "ON");
-            else
-                ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "OFF");
-
-            ImGui::Text("Press 'O' to toggle");
-            ImGui::Separator();
-
-            ImGui::Text("Position: (%d, %d, %d)",
-                        (int)camera.GetPosition().x,
-                        (int)camera.GetPosition().y,
-                        (int)camera.GetPosition().z);
-
-            ImGui::End();
-
-            // ───────────────────────────────────────────────
-            // PANEL: SCENE VIEW (Render del Offscreen)
-            // ───────────────────────────────────────────────
-            ImGui::Begin("Viewport");
-
-            bool sceneHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-
-            if (sceneHovered && g_Input.mouseCapture)
+            // Framebuffer resize de ventana principal
+            if (loader->window->WasFramebufferResized())
             {
-                ImGui::GetIO().WantCaptureMouse = false;
+                uint32_t w, h;
+                loader->window->GetWindowSize(w, h);
+                loader->gfx->NotifyFramebufferResized();
+                loader->window->ResetFramebufferResizedFlag();
             }
 
-            ImVec2 size = ImGui::GetContentRegionAvail();
-            ImGui::Image(offscreen->imguiTextureID, size);
-            ImGui::End();
+            // Actualizar UBOs
+            loader->gfx->UpdateMaterialUBO(normalMaterialArriba.get(), uboArriba);
+            loader->gfx->UpdateMaterialUBO(normalMaterialAbajo.get(), uboAbajo);
 
+            // Renderizar ImGui
+            imgui.BeginFrame();
+            uiRender->RenderAll();
             ImGui::Render();
 
             loader->gfx->DrawFrame([](VkCommandBuffer cmd)
@@ -500,6 +490,9 @@ int main()
         }
 
         std::cout << "\nCerrando aplicacion...\n";
+        std::cout << "Total frames renderizados: " << gameTimer.GetFrameCount() << "\n";
+        std::cout << "Tiempo total de ejecucion: " << gameTimer.GetTotalTime() << " segundos\n";
+
         g_Camera = nullptr;
     }
     catch (const std::exception &e)

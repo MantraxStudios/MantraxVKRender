@@ -25,6 +25,17 @@ public:
         return _Renders[index];
     }
 
+    template <typename T>
+    T *GetByType()
+    {
+        for (auto *r : _Renders)
+        {
+            if (auto casted = dynamic_cast<T *>(r))
+                return casted;
+        }
+        return nullptr;
+    }
+
     const std::vector<UIBehaviour *> &GetAll() const
     {
         return _Renders;
