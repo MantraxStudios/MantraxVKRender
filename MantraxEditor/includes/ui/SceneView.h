@@ -1,10 +1,13 @@
 #pragma once
-#include "../UIBehaviour.h"
 #include "../../MantraxRender/include/MantraxGFX_API.h"
 #include "../../MantraxAddons/include/imgui/imgui.h"
 #include "../../MantraxAddons/include/imgui/imgui_impl_win32.h"
 #include "../../MantraxAddons/include/imgui/imgui_impl_vulkan.h"
+#include "../UIBehaviour.h"
 #include <memory>
+
+// Forward declaration de ImVec2
+struct ImVec2;
 
 class SceneView : public UIBehaviour
 {
@@ -22,6 +25,10 @@ private:
     int lastWidth = 0;
     int lastHeight = 0;
     bool needsResize = false;
+
+    // Control de input
+    bool isHovered = false;
+    bool isFocused = false;
 
     // Constantes
     static const int MIN_WIDTH = 64;
@@ -48,6 +55,11 @@ public:
     bool CheckResize();
     bool NeedsResize() const { return needsResize; }
     void ResetResizeFlag() { needsResize = false; }
+
+    // Control de input - NUEVO
+    bool IsHovered() const { return isHovered; }
+    bool IsFocused() const { return isFocused; }
+    bool WantsMouseCapture() const { return isHovered || isFocused; }
 
     // Validación
     bool IsValid() const;

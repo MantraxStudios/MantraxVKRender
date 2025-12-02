@@ -5,7 +5,9 @@
 // Constructor
 SceneView::SceneView()
     : lastWidth(width),
-      lastHeight(height)
+      lastHeight(height),
+      isHovered(false),
+      isFocused(false)
 {
     isOpen = true;
 }
@@ -39,6 +41,12 @@ void SceneView::OnRender()
         // Renderizar la imagen del framebuffer offscreen
         ImVec2 imageSize(static_cast<float>(width), static_cast<float>(height));
         ImGui::Image(renderID, imageSize);
+
+        // IMPORTANTE: Detectar si el mouse está sobre la imagen del viewport
+        isHovered = ImGui::IsItemHovered();
+
+        // Detectar si la ventana tiene foco
+        isFocused = ImGui::IsWindowFocused();
     }
     else
     {
@@ -53,6 +61,9 @@ void SceneView::OnRender()
         ImGui::Text("Resources:");
         ImGui::BulletText("RenderID: %s", HasValidRenderTarget() ? "Valid" : "Invalid");
         ImGui::BulletText("Framebuffer: %s", HasValidFramebuffer() ? "Valid" : "Invalid");
+
+        isHovered = false;
+        isFocused = false;
     }
 
     ImGui::End();

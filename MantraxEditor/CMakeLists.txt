@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB ADDON_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/../MantraxAddons/include/imgui/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MantraxPhysics/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )

@@ -104,7 +104,6 @@ namespace Mantrax
     private:
         void InitializeImGui(HWND hwnd, GFX *gfx)
         {
-            // 1) Pool grande, igual que el ejemplo oficial de ImGui
             VkDescriptorPoolSize pool_sizes[] =
                 {
                     {VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
