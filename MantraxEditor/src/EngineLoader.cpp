@@ -13,7 +13,7 @@ void EngineLoader::Start(HINSTANCE hInst, const std::function<LRESULT(HWND, UINT
 
     // Configuración GFX
     Mantrax::GFXConfig gfxConfig;
-    gfxConfig.clearColor = {0.53f, 0.81f, 0.92f, 1.0f};
+    gfxConfig.clearColor = {0.05f, 0.05f, 0.05f, 1.0f};
 
     // Crear GFX
     gfx = std::make_unique<Mantrax::GFX>(hInst, window->GetHWND(), gfxConfig);

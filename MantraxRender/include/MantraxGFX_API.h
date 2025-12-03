@@ -26,6 +26,9 @@
 #include <functional>
 #include <array>
 
+#include <glm/glm.hpp>
+#include <algorithm>
+
 namespace Mantrax
 {
     struct Vertex
@@ -83,6 +86,7 @@ namespace Mantrax
         float model[16];
         float view[16];
         float projection[16];
+        float cameraPosition[4];
     };
 
     class Mesh
@@ -128,6 +132,43 @@ namespace Mantrax
         Shader(const ShaderConfig &cfg) : config(cfg) {}
     };
 
+    class Texture
+    {
+    public:
+        VkImage image = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        VkImageView imageView = VK_NULL_HANDLE;
+        VkSampler sampler = VK_NULL_HANDLE;
+        uint32_t width = 0;
+        uint32_t height = 0;
+
+        Texture() = default;
+    };
+
+    struct MaterialPushConstants
+    {
+        float baseColorFactor[4] = {1.0f, 1.0f, 1.0f, 1.0f}; // RGB + unused
+        float metallicFactor = 0.0f;
+        float roughnessFactor = 0.6f;
+        float normalScale = 5.0f;
+        int32_t useAlbedoMap = 0;
+        int32_t useNormalMap = 0;
+        int32_t useMetallicMap = 0;
+        int32_t useRoughnessMap = 0;
+        int32_t useAOMap = 0;
+    };
+
+    // Conjunto de texturas PBR
+    struct PBRTextures
+    {
+        std::shared_ptr<Texture> albedo;
+        std::shared_ptr<Texture> normal;
+        std::shared_ptr<Texture> metallic;
+        std::shared_ptr<Texture> roughness;
+        std::shared_ptr<Texture> ao;
+    };
+
+    // Actualizar la clase Material
     class Material
     {
     public:
@@ -138,8 +179,67 @@ namespace Mantrax
         VkBuffer uniformBuffer = VK_NULL_HANDLE;
         VkDeviceMemory uniformBufferMemory = VK_NULL_HANDLE;
 
+        // Texturas PBR
+        PBRTextures pbrTextures;
+
+        // Push constants para propiedades del material
+        MaterialPushConstants pushConstants;
+
         Material() = default;
         Material(std::shared_ptr<Shader> shdr) : shader(shdr) {}
+
+        // Helper methods
+        void SetAlbedoTexture(std::shared_ptr<Texture> tex)
+        {
+            pbrTextures.albedo = tex;
+            pushConstants.useAlbedoMap = (tex != nullptr) ? 1 : 0;
+        }
+
+        void SetNormalTexture(std::shared_ptr<Texture> tex)
+        {
+            pbrTextures.normal = tex;
+            pushConstants.useNormalMap = (tex != nullptr) ? 1 : 0;
+        }
+
+        void SetMetallicTexture(std::shared_ptr<Texture> tex)
+        {
+            pbrTextures.metallic = tex;
+            pushConstants.useMetallicMap = (tex != nullptr) ? 1 : 0;
+        }
+
+        void SetRoughnessTexture(std::shared_ptr<Texture> tex)
+        {
+            pbrTextures.roughness = tex;
+            pushConstants.useRoughnessMap = (tex != nullptr) ? 1 : 0;
+        }
+
+        void SetAOTexture(std::shared_ptr<Texture> tex)
+        {
+            pbrTextures.ao = tex;
+            pushConstants.useAOMap = (tex != nullptr) ? 1 : 0;
+        }
+
+        void SetBaseColor(float r, float g, float b)
+        {
+            pushConstants.baseColorFactor[0] = r;
+            pushConstants.baseColorFactor[1] = g;
+            pushConstants.baseColorFactor[2] = b;
+        }
+
+        void SetMetallicFactor(float m)
+        {
+            pushConstants.metallicFactor = glm::clamp(m, 0.0f, 1.0f);
+        }
+
+        void SetRoughnessFactor(float r)
+        {
+            pushConstants.roughnessFactor = glm::clamp(r, 0.0f, 1.0f);
+        }
+
+        void SetNormalScale(float s)
+        {
+            pushConstants.normalScale = s;
+        }
     };
 
     struct RenderObject
@@ -155,7 +255,7 @@ namespace Mantrax
     struct GFXConfig
     {
         bool enableValidation = false;
-        VkClearColorValue clearColor = {0.3f, 0.3f, 0.3f, 1.0f};
+        VkClearColorValue clearColor = {0.1f, 0.1f, 0.1f, 1.0f};
     };
 
     class OffscreenFramebuffer
@@ -258,6 +358,83 @@ namespace Mantrax
         ~GFX()
         {
             Cleanup();
+        }
+
+        std::shared_ptr<Texture> CreateTexture(unsigned char *data, int width, int height)
+        {
+            auto texture = std::make_shared<Texture>();
+            texture->width = width;
+            texture->height = height;
+
+            VkDeviceSize imageSize = width * height * 4; // RGBA
+
+            // Crear staging buffer
+            VkBuffer stagingBuffer;
+            VkDeviceMemory stagingMemory;
+            CreateBuffer(imageSize,
+                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                         stagingBuffer, stagingMemory);
+
+            // Copiar datos
+            void *mappedData;
+            vkMapMemory(m_Device, stagingMemory, 0, imageSize, 0, &mappedData);
+            memcpy(mappedData, data, imageSize);
+            vkUnmapMemory(m_Device, stagingMemory);
+
+            // Crear imagen
+            CreateImage(width, height, VK_FORMAT_R8G8B8A8_UNORM,
+                        VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        texture->image, texture->memory);
+
+            // Transicionar imagen y copiar datos
+            TransitionImageLayout(texture->image, VK_FORMAT_R8G8B8A8_UNORM,
+                                  VK_IMAGE_LAYOUT_UNDEFINED,
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+            CopyBufferToImage(stagingBuffer, texture->image, width, height);
+
+            TransitionImageLayout(texture->image, VK_FORMAT_R8G8B8A8_UNORM,
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+            // Limpiar staging buffer
+            vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
+            vkFreeMemory(m_Device, stagingMemory, nullptr);
+
+            // Crear image view
+            texture->imageView = CreateImageView(texture->image, VK_FORMAT_R8G8B8A8_UNORM,
+                                                 VK_IMAGE_ASPECT_COLOR_BIT);
+
+            // Crear sampler
+            VkSamplerCreateInfo samplerInfo{};
+            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            samplerInfo.magFilter = VK_FILTER_LINEAR;
+            samplerInfo.minFilter = VK_FILTER_LINEAR;
+            samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            samplerInfo.anisotropyEnable = VK_TRUE;
+            samplerInfo.maxAnisotropy = 16.0f;
+            samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+            samplerInfo.unnormalizedCoordinates = VK_FALSE;
+            samplerInfo.compareEnable = VK_FALSE;
+            samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+            if (vkCreateSampler(m_Device, &samplerInfo, nullptr, &texture->sampler) != VK_SUCCESS)
+                throw std::runtime_error("Error creando sampler de textura");
+
+            return texture;
+        }
+
+        void SetMaterialTexture(std::shared_ptr<Material> material, std::shared_ptr<Texture> texture)
+        {
+            // Ahora asigna a albedo para compatibilidad
+            material->SetAlbedoTexture(texture);
+            UpdatePBRDescriptorSet(material);
         }
 
         std::shared_ptr<OffscreenFramebuffer> CreateOffscreenFramebuffer(uint32_t width, uint32_t height)
@@ -585,6 +762,122 @@ namespace Mantrax
                 1, &barrier2);
 
             EndSingleTimeCommands(cmd);
+        }
+
+        std::shared_ptr<Texture> CreateDefaultWhiteTexture()
+        {
+            unsigned char whitePixel[4] = {255, 255, 255, 255};
+            return CreateTexture(whitePixel, 1, 1);
+        }
+
+        // Crear textura normal por defecto (normal apuntando hacia arriba)
+        std::shared_ptr<Texture> CreateDefaultNormalTexture()
+        {
+            unsigned char normalPixel[4] = {128, 128, 255, 255}; // Normal (0, 0, 1) en tangent space
+            return CreateTexture(normalPixel, 1, 1);
+        }
+
+        // Actualizar descriptor set con todas las texturas PBR
+        void UpdatePBRDescriptorSet(std::shared_ptr<Material> material)
+        {
+            // Crear texturas por defecto si no existen
+            static std::shared_ptr<Texture> defaultWhite = nullptr;
+            static std::shared_ptr<Texture> defaultNormal = nullptr;
+
+            if (!defaultWhite)
+                defaultWhite = CreateDefaultWhiteTexture();
+            if (!defaultNormal)
+                defaultNormal = CreateDefaultNormalTexture();
+
+            // Usar texturas por defecto si no están asignadas
+            auto albedoTex = material->pbrTextures.albedo ? material->pbrTextures.albedo : defaultWhite;
+            auto normalTex = material->pbrTextures.normal ? material->pbrTextures.normal : defaultNormal;
+            auto metallicTex = material->pbrTextures.metallic ? material->pbrTextures.metallic : defaultWhite;
+            auto roughnessTex = material->pbrTextures.roughness ? material->pbrTextures.roughness : defaultWhite;
+            auto aoTex = material->pbrTextures.ao ? material->pbrTextures.ao : defaultWhite;
+
+            // Buffer info para UBO
+            VkDescriptorBufferInfo bufferInfo{};
+            bufferInfo.buffer = material->uniformBuffer;
+            bufferInfo.offset = 0;
+            bufferInfo.range = sizeof(UniformBufferObject);
+
+            // Image infos para las 5 texturas
+            std::array<VkDescriptorImageInfo, 5> imageInfos{};
+
+            // Albedo
+            imageInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfos[0].imageView = albedoTex->imageView;
+            imageInfos[0].sampler = albedoTex->sampler;
+
+            // Normal
+            imageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfos[1].imageView = normalTex->imageView;
+            imageInfos[1].sampler = normalTex->sampler;
+
+            // Metallic
+            imageInfos[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfos[2].imageView = metallicTex->imageView;
+            imageInfos[2].sampler = metallicTex->sampler;
+
+            // Roughness
+            imageInfos[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfos[3].imageView = roughnessTex->imageView;
+            imageInfos[3].sampler = roughnessTex->sampler;
+
+            // AO
+            imageInfos[4].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfos[4].imageView = aoTex->imageView;
+            imageInfos[4].sampler = aoTex->sampler;
+
+            // Crear writes para descriptor set
+            std::array<VkWriteDescriptorSet, 6> writes{};
+
+            // Write 0: UBO
+            writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[0].dstSet = material->descriptorSet;
+            writes[0].dstBinding = 0;
+            writes[0].dstArrayElement = 0;
+            writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[0].descriptorCount = 1;
+            writes[0].pBufferInfo = &bufferInfo;
+
+            // Write 1-5: Texturas PBR
+            for (int i = 0; i < 5; i++)
+            {
+                writes[i + 1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[i + 1].dstSet = material->descriptorSet;
+                writes[i + 1].dstBinding = i + 1;
+                writes[i + 1].dstArrayElement = 0;
+                writes[i + 1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                writes[i + 1].descriptorCount = 1;
+                writes[i + 1].pImageInfo = &imageInfos[i];
+            }
+
+            vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(writes.size()),
+                                   writes.data(), 0, nullptr);
+        }
+
+        // Función pública para asignar texturas PBR a un material
+        void SetMaterialPBRTextures(std::shared_ptr<Material> material,
+                                    std::shared_ptr<Texture> albedo = nullptr,
+                                    std::shared_ptr<Texture> normal = nullptr,
+                                    std::shared_ptr<Texture> metallic = nullptr,
+                                    std::shared_ptr<Texture> roughness = nullptr,
+                                    std::shared_ptr<Texture> ao = nullptr)
+        {
+            if (albedo)
+                material->SetAlbedoTexture(albedo);
+            if (normal)
+                material->SetNormalTexture(normal);
+            if (metallic)
+                material->SetMetallicTexture(metallic);
+            if (roughness)
+                material->SetRoughnessTexture(roughness);
+            if (ao)
+                material->SetAOTexture(ao);
+
+            UpdatePBRDescriptorSet(material);
         }
 
         void DestroyOffscreenFramebuffer(std::shared_ptr<OffscreenFramebuffer> offscreen)
@@ -1107,6 +1400,34 @@ namespace Mantrax
 
         std::vector<std::shared_ptr<Shader>> m_AllShaders;
 
+    private:
+        void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+        {
+            VkCommandBuffer cmd = BeginSingleTimeCommands();
+
+            VkBufferImageCopy region{};
+            region.bufferOffset = 0;
+            region.bufferRowLength = 0;
+            region.bufferImageHeight = 0;
+            region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            region.imageSubresource.mipLevel = 0;
+            region.imageSubresource.baseArrayLayer = 0;
+            region.imageSubresource.layerCount = 1;
+            region.imageOffset = {0, 0, 0};
+            region.imageExtent = {width, height, 1};
+
+            vkCmdCopyBufferToImage(cmd, buffer, image,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                   1, &region);
+
+            EndSingleTimeCommands(cmd);
+        }
+
+        void UpdateDescriptorSetWithTexture(std::shared_ptr<Material> material)
+        {
+            UpdatePBRDescriptorSet(material);
+        }
+
         static std::vector<char> ReadFile(const std::string &filename)
         {
             std::ifstream file(filename, std::ios::binary | std::ios::ate);
@@ -1289,7 +1610,71 @@ namespace Mantrax
                                    VkImageLayout oldLayout, VkImageLayout newLayout)
         {
             VkCommandBuffer cmd = BeginSingleTimeCommands();
-            TransitionImageLayoutCmd(cmd, image, format, oldLayout, newLayout);
+
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = oldLayout;
+            barrier.newLayout = newLayout;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = image;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+
+            VkPipelineStageFlags srcStage;
+            VkPipelineStageFlags dstStage;
+
+            if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+                newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            {
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            }
+            else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+                     newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            {
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+                dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            }
+            else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+                     newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            {
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            }
+            else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
+                     newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            {
+                barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                srcStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            }
+            else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL &&
+                     newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            {
+                barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            }
+            else
+            {
+                throw std::invalid_argument("Transición de layout no soportada");
+            }
+
+            vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0,
+                                 0, nullptr, 0, nullptr, 1, &barrier);
+
             EndSingleTimeCommands(cmd);
         }
 
@@ -1807,17 +2192,20 @@ namespace Mantrax
         {
             std::array<VkDescriptorPoolSize, 2> poolSizes{};
 
+            // UBOs
             poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             poolSizes[0].descriptorCount = 1000;
 
+            // Image Samplers (ahora necesitamos 5 por material: albedo, normal, metallic, roughness, AO)
             poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            poolSizes[1].descriptorCount = 1000;
+            poolSizes[1].descriptorCount = 5000; // 1000 materiales * 5 texturas
 
             VkDescriptorPoolCreateInfo poolInfo{};
             poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
             poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
             poolInfo.pPoolSizes = poolSizes.data();
             poolInfo.maxSets = 2000;
+            poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; // Para poder actualizar
 
             if (vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS)
                 throw std::runtime_error("Error creando descriptor pool");
@@ -1969,24 +2357,64 @@ namespace Mantrax
             cb.attachmentCount = 1;
             cb.pAttachments = &cba;
 
-            VkDescriptorSetLayoutBinding uboBinding{};
-            uboBinding.binding = 0;
-            uboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            uboBinding.descriptorCount = 1;
-            uboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+            std::array<VkDescriptorSetLayoutBinding, 6> bindings{};
+
+            // Binding 0: UBO (matrices)
+            bindings[0].binding = 0;
+            bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            bindings[0].descriptorCount = 1;
+            bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+            // Binding 1: Albedo Map
+            bindings[1].binding = 1;
+            bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            bindings[1].descriptorCount = 1;
+            bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+            // Binding 2: Normal Map
+            bindings[2].binding = 2;
+            bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            bindings[2].descriptorCount = 1;
+            bindings[2].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+            // Binding 3: Metallic Map
+            bindings[3].binding = 3;
+            bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            bindings[3].descriptorCount = 1;
+            bindings[3].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+            // Binding 4: Roughness Map
+            bindings[4].binding = 4;
+            bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            bindings[4].descriptorCount = 1;
+            bindings[4].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+            // Binding 5: AO Map
+            bindings[5].binding = 5;
+            bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            bindings[5].descriptorCount = 1;
+            bindings[5].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
             VkDescriptorSetLayoutCreateInfo layoutInfo{};
             layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-            layoutInfo.bindingCount = 1;
-            layoutInfo.pBindings = &uboBinding;
+            layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+            layoutInfo.pBindings = bindings.data();
 
             if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &shader->descriptorSetLayout) != VK_SUCCESS)
                 throw std::runtime_error("Error creando descriptor set layout");
+
+            // ============ PIPELINE LAYOUT CON PUSH CONSTANTS ============
+            VkPushConstantRange pushConstantRange{};
+            pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+            pushConstantRange.offset = 0;
+            pushConstantRange.size = sizeof(MaterialPushConstants);
 
             VkPipelineLayoutCreateInfo pl{};
             pl.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
             pl.setLayoutCount = 1;
             pl.pSetLayouts = &shader->descriptorSetLayout;
+            pl.pushConstantRangeCount = 1;
+            pl.pPushConstantRanges = &pushConstantRange;
 
             if (vkCreatePipelineLayout(m_Device, &pl, nullptr, &shader->pipelineLayout) != VK_SUCCESS)
                 throw std::runtime_error("Error creando pipeline layout");
@@ -2110,6 +2538,8 @@ namespace Mantrax
             if (vkAllocateDescriptorSets(m_Device, &allocInfo, &material->descriptorSet) != VK_SUCCESS)
                 throw std::runtime_error("Error creando descriptor set");
 
+            // SOLO actualizar el UBO por ahora
+            // La textura se actualizará cuando se llame a SetMaterialTexture
             VkDescriptorBufferInfo bufferInfo{};
             bufferInfo.buffer = material->uniformBuffer;
             bufferInfo.offset = 0;
@@ -2126,6 +2556,8 @@ namespace Mantrax
 
             vkUpdateDescriptorSets(m_Device, 1, &descriptorWrite, 0, nullptr);
         }
+
+        // Actualizar RecordCommandBuffer en GFX
 
         void RecordCommandBuffer(VkCommandBuffer cmd, uint32_t index,
                                  std::function<void(VkCommandBuffer)> imguiRenderCallback = nullptr)
@@ -2156,6 +2588,7 @@ namespace Mantrax
 
             vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+            // Renderizar objetos
             for (const auto &obj : m_RenderObjects)
             {
                 if (!obj.mesh || !obj.material || !obj.material->shader)
@@ -2167,20 +2600,35 @@ namespace Mantrax
                 if (!obj.material->shader->pipeline)
                     continue;
 
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.material->shader->pipeline);
+                // Bind pipeline
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  obj.material->shader->pipeline);
 
+                // NUEVO: Push constants para propiedades del material
+                vkCmdPushConstants(
+                    cmd,
+                    obj.material->shader->pipelineLayout,
+                    VK_SHADER_STAGE_FRAGMENT_BIT,
+                    0,
+                    sizeof(MaterialPushConstants),
+                    &obj.material->pushConstants);
+
+                // Bind buffers
                 VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
                 VkDeviceSize offsets[] = {0};
                 vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
                 vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
+                // Bind descriptor set
                 vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                         obj.material->shader->pipelineLayout,
                                         0, 1, &obj.material->descriptorSet, 0, nullptr);
 
+                // Draw
                 vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()), 1, 0, 0, 0);
             }
 
+            // Renderizar ImGui si hay callback
             if (imguiRenderCallback)
             {
                 imguiRenderCallback(cmd);
@@ -2360,6 +2808,15 @@ namespace Mantrax
                 if (obj.material && obj.material->shader)
                 {
                     CreateDescriptorSet(obj.material);
+
+                    if (obj.material->pbrTextures.albedo ||
+                        obj.material->pbrTextures.normal ||
+                        obj.material->pbrTextures.metallic ||
+                        obj.material->pbrTextures.roughness ||
+                        obj.material->pbrTextures.ao)
+                    {
+                        UpdatePBRDescriptorSet(obj.material);
+                    }
                 }
             }
 
