@@ -13,7 +13,7 @@ void EngineLoader::Start(HINSTANCE hInst, const std::function<LRESULT(HWND, UINT
 
     // Configuración GFX
     Mantrax::GFXConfig gfxConfig;
-    gfxConfig.clearColor = {0.05f, 0.05f, 0.05f, 1.0f};
+    gfxConfig.clearColor = {0.1f, 0.1f, 0.1f, 1.0f};
 
     // Crear GFX
     gfx = std::make_unique<Mantrax::GFX>(hInst, window->GetHWND(), gfxConfig);
@@ -23,9 +23,37 @@ void EngineLoader::Start(HINSTANCE hInst, const std::function<LRESULT(HWND, UINT
     normalShaderConfig.fragmentShaderPath = "shaders/pbr.frag.spv";
     normalShaderConfig.vertexBinding = Mantrax::Vertex::GetBindingDescription();
     normalShaderConfig.vertexAttributes = Mantrax::Vertex::GetAttributeDescriptions();
-    normalShaderConfig.cullMode = VK_CULL_MODE_BACK_BIT;
-    normalShaderConfig.depthTestEnable = true;
+
+    // Topology y rasterización
+    normalShaderConfig.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    normalShaderConfig.polygonMode = VK_POLYGON_MODE_FILL;
+    normalShaderConfig.cullMode = VK_CULL_MODE_BACK_BIT; // Culling normal (back faces)
+    normalShaderConfig.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+    // ✅ DEPTH CONFIGURATION PARA OBJETOS OPACOS:
+    normalShaderConfig.depthTestEnable = true;              // Leer depth buffer
+    normalShaderConfig.depthWriteEnable = true;             // ✅ CRÍTICO: Escribir depth
+    normalShaderConfig.depthCompareOp = VK_COMPARE_OP_LESS; // Dibujar si depth < actual
+
+    // Blending (normalmente off para objetos opacos)
+    normalShaderConfig.blendEnable = false;
+
     normalShader = gfx->CreateShader(normalShaderConfig);
+
+    skyboxShaderConfig.vertexShaderPath = "shaders/skybox.vert.spv";
+    skyboxShaderConfig.fragmentShaderPath = "shaders/skybox.frag.spv";
+    skyboxShaderConfig.vertexBinding = Mantrax::Vertex::GetBindingDescription();
+    skyboxShaderConfig.vertexAttributes = Mantrax::Vertex::GetAttributeDescriptions();
+
+    skyboxShaderConfig.depthTestEnable = true;                       // Testear depth
+    skyboxShaderConfig.depthWriteEnable = false;                     // ❌ NO escribir en depth
+    skyboxShaderConfig.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL; // Permitir depth = 1.0
+    skyboxShaderConfig.cullMode = VK_CULL_MODE_FRONT_BIT;            // Cull frontal (interior de esfera)
+    skyboxShaderConfig.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    skyboxShaderConfig.polygonMode = VK_POLYGON_MODE_FILL;
+    skyboxShaderConfig.blendEnable = false;
+
+    skyboxShader = gfx->CreateShader(skyboxShaderConfig);
 
     // --- Outline shader ---
     outlineShaderConfig.vertexShaderPath = "shaders/outline.vert.spv";

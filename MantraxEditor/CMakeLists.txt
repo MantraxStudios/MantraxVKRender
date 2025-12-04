@@ -32,7 +32,7 @@ endif()
 link_directories(../MantraxRender/libs)     # Directorio de las bibliotecas de Vulkan
 
 # Buscar todos los archivos .lib en el directorio ../render/libs
-file(GLOB LIBS "../MantraxRender/libs/*.lib")
+file(GLOB LIBS "../MantraxRender/libs/*.lib ../MantraxAddons/libs/*.lib")
 
 # Enlazar con las bibliotecas de DirectX 12
 target_link_libraries(MantraxApp 
@@ -59,4 +59,5 @@ target_link_libraries(MantraxApp
 # Enlazar con la biblioteca de Vulkan
 target_link_libraries(MantraxApp
     "${CMAKE_SOURCE_DIR}/../MantraxRender/libs/vulkan-1.lib"
+    "${CMAKE_SOURCE_DIR}/../MantraxAddons/libs/assimp-vc143-mt.lib"
 )

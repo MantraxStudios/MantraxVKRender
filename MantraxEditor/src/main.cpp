@@ -2,6 +2,8 @@
 #include "../MantraxRender/include/MantraxGFX_API.h"
 #include "../MantraxRender/include/MantraxGFX_Timer.h"
 #include "../MantraxECS/include/TextureLoader.h"
+#include "../MantraxECS/include/SkyBox.h"
+#include "../MantraxECS/include/AssimpLoader.h"
 #include "../includes/FPSCamera.h"
 #include "../includes/EngineLoader.h"
 #include "../includes/UIRender.h"
@@ -14,7 +16,6 @@
 #include <iostream>
 #include <vector>
 
-// Incluir para cargar texturas
 #define STB_IMAGE_IMPLEMENTATION
 #include "../MantraxECS/include/TextureLoader.h"
 
@@ -83,85 +84,6 @@ std::shared_ptr<Mantrax::Texture> LoadPBRTexture(
 
     std::cout << "✓ Loaded " << name << ": " << path << " (" << width << "x" << height << ")\n";
     return texture;
-}
-
-void CreateCubeVertices(std::vector<Mantrax::Vertex> &vertices, std::vector<uint32_t> &indices)
-{
-    vertices.clear();
-    indices.clear();
-
-    struct FaceVertex
-    {
-        float pos[3];
-        float normal[3];
-        float color[3];
-        float uv[2];
-    };
-
-    // Cara frontal (Z+)
-    FaceVertex frontFace[] = {
-        {{-0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-        {{0.5f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-        {{0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-        {{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
-
-    // Cara trasera (Z-)
-    FaceVertex backFace[] = {
-        {{0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-        {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-        {{-0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-        {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
-
-    // Cara izquierda (X-)
-    FaceVertex leftFace[] = {
-        {{-0.5f, -0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-        {{-0.5f, -0.5f, 0.5f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-        {{-0.5f, 0.5f, 0.5f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-        {{-0.5f, 0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
-
-    // Cara derecha (X+)
-    FaceVertex rightFace[] = {
-        {{0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-        {{0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-        {{0.5f, 0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-        {{0.5f, 0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
-
-    // Cara superior (Y+)
-    FaceVertex topFace[] = {
-        {{-0.5f, 0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-        {{0.5f, 0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-        {{0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-        {{-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
-
-    // Cara inferior (Y-)
-    FaceVertex bottomFace[] = {
-        {{-0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-        {{0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-        {{0.5f, -0.5f, 0.5f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-        {{-0.5f, -0.5f, 0.5f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
-
-    FaceVertex *faces[] = {frontFace, backFace, leftFace, rightFace, topFace, bottomFace};
-    uint32_t faceIndices[] = {0, 1, 2, 0, 2, 3};
-
-    for (int face = 0; face < 6; face++)
-    {
-        uint32_t baseIdx = vertices.size();
-
-        for (int i = 0; i < 4; i++)
-        {
-            Mantrax::Vertex v;
-            memcpy(v.position, faces[face][i].pos, 3 * sizeof(float));
-            memcpy(v.normal, faces[face][i].normal, 3 * sizeof(float));
-            memcpy(v.color, faces[face][i].color, 3 * sizeof(float));
-            memcpy(v.texCoord, faces[face][i].uv, 2 * sizeof(float));
-            vertices.push_back(v);
-        }
-
-        for (int i = 0; i < 6; i++)
-        {
-            indices.push_back(baseIdx + faceIndices[i]);
-        }
-    }
 }
 
 LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -296,11 +218,37 @@ int main()
 
         Mantrax::ImGuiManager imgui(loader->window->GetHWND(), loader->gfx.get());
 
-        // ============ CREAR MESH DEL CUBO ============
-        std::vector<Mantrax::Vertex> cubeVertices;
-        std::vector<uint32_t> cubeIndices;
-        CreateCubeVertices(cubeVertices, cubeIndices);
-        auto cubeMesh = loader->gfx->CreateMesh(cubeVertices, cubeIndices);
+        // ============ CARGAR MODELO CON ASSIMPLOADER ============
+        Mantrax::AssimpLoader modelLoader;
+        std::vector<Mantrax::Vertex> modelVertices;
+        std::vector<uint32_t> modelIndices;
+
+        // CAMBIA ESTA RUTA A TU MODELO
+        std::string modelPath = "Cube.fbx";
+
+        // Configurar opciones de carga (opcional)
+        Mantrax::AssimpLoader::LoadSettings settings;
+        settings.triangulate = true;
+        settings.genNormals = true;
+        settings.flipUVs = true;
+        settings.calcTangents = true;
+
+        std::cout << "\n=== Loading 3D Model ===\n";
+        if (!modelLoader.LoadModel(modelPath, modelVertices, modelIndices, settings, true))
+        {
+            std::cerr << "ERROR: " << modelLoader.GetLastError() << "\n";
+            std::cerr << "Exiting...\n";
+            return -1;
+        }
+
+        // Obtener información del modelo cargado
+        auto modelInfo = modelLoader.GetModelInfo();
+        std::cout << "Model loaded successfully!\n";
+        std::cout << "  Total meshes: " << modelInfo.numMeshes << "\n";
+        std::cout << "  Has normals: " << (modelInfo.hasNormals ? "Yes" : "No") << "\n";
+        std::cout << "  Has UVs: " << (modelInfo.hasTexCoords ? "Yes" : "No") << "\n\n";
+
+        auto mesh = loader->gfx->CreateMesh(modelVertices, modelIndices);
 
         // ============ CARGAR TEXTURAS PBR ============
         std::cout << "\n=== Loading PBR Textures ===\n";
@@ -313,45 +261,82 @@ int main()
 
         std::cout << "============================\n\n";
 
-        // ============ CREAR MATERIAL PBR ============
+        // ============ CREAR MATERIAL PBR PARA EL CUBO ============
         auto cubeMaterial = loader->gfx->CreateMaterial(loader->normalShader);
 
-        // ESTO ES LO CRUCIAL: Configurar propiedades ANTES de asignar texturas
         cubeMaterial->SetBaseColor(1.0f, 1.0f, 1.0f);
-        cubeMaterial->SetMetallicFactor(1.0f);  // CAMBIADO: 1.0 para metal brillante
-        cubeMaterial->SetRoughnessFactor(0.2f); // CAMBIADO: 0.2 para superficie pulida
+        cubeMaterial->SetMetallicFactor(1.0f);
+        cubeMaterial->SetRoughnessFactor(0.2f);
         cubeMaterial->SetNormalScale(1.0f);
 
-        // Asignar todas las texturas PBR
         loader->gfx->SetMaterialPBRTextures(
             cubeMaterial,
-            albedoTex,    // Albedo
-            normalTex,    // Normal
-            metalTex,     // Metallic
-            roughnessTex, // Roughness
-            aoTex         // AO
-        );
+            albedoTex,
+            normalTex,
+            metalTex,
+            roughnessTex,
+            aoTex);
 
-        // ============ CREAR CUBO ============
-        RenderableObject cube;
-        cube.position = glm::vec3(0.0f, 0.0f, 0.0f);
-        cube.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-        cube.scale = glm::vec3(2.0f);
-        cube.material = cubeMaterial;
-        cube.renderObj = Mantrax::RenderObject(cubeMesh, cube.material);
+        // ============ CREAR OBJETO ============
+        RenderableObject object;
+        object.position = glm::vec3(0.0f, 0.0f, 0.0f);
+        object.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+        object.scale = glm::vec3(2.0f);
+        object.material = cubeMaterial;
+        object.renderObj = Mantrax::RenderObject(mesh, object.material);
 
         // ============ CONFIGURAR CÁMARA ============
-        Mantrax::FPSCamera camera(glm::vec3(0.0f, 0.0f, 5.0f), 60.0f, 0.1f, 100.0f);
+        Mantrax::FPSCamera camera(glm::vec3(0.0f, 0.0f, 5.0f), 60.0f, 0.1f, 1000.0f);
         camera.SetAspectRatio(1920.0f / 1080.0f);
         camera.SetMovementSpeed(5.0f);
         camera.SetMouseSensitivity(0.1f);
         g_Camera = &camera;
 
-        // ============ SETUP RENDERING ============
-        loader->gfx->AddRenderObject(cube.renderObj);
+        // ============ CREAR SKYBOX ============
+        std::cout << "\n=== Creating Skybox ===\n";
+        Mantrax::SkyBox skybox(loader->gfx.get(), 1.0f, 32, 16);
 
-        std::vector<RenderableObject> objects = {cube};
-        std::vector<Mantrax::RenderObject> renderObjects = {cube.renderObj};
+        // Cargar textura HDR/equirectangular para el skybox
+        auto skyboxTexture = LoadPBRTexture(loader->gfx.get(), "textures/skybox.jpg", "Skybox");
+
+        if (!skyboxTexture)
+        {
+            std::cerr << "Warning: Failed to load skybox texture\n";
+        }
+        else
+        {
+            std::cout << "Texture skybox loaded successfully" << std::endl;
+        }
+
+        // ============ CREAR MATERIAL PARA EL SKYBOX ============
+        auto skyboxMaterial = loader->gfx->CreateMaterial(loader->skyboxShader);
+
+        // Configurar material del skybox
+        skyboxMaterial->SetBaseColor(2.0f, 2.0f, 2.0f); // Brightness inicial
+
+        // Asignar solo la textura de albedo al skybox (sin PBR maps)
+        loader->gfx->SetMaterialPBRTextures(
+            skyboxMaterial,
+            skyboxTexture, // Albedo (textura del skybox)
+            nullptr,       // No normal map
+            nullptr,       // No metallic map
+            nullptr,       // No roughness map
+            nullptr        // No AO map
+        );
+
+        // Obtener el objeto de renderizado del skybox y asignarle el material
+        auto skyboxRenderObj = skybox.GetRenderObject();
+        skyboxRenderObj.material = skyboxMaterial;
+
+        // UBO para el skybox
+        Mantrax::UniformBufferObject skyboxUBO;
+
+        // ============ SETUP RENDERING ============
+        // IMPORTANTE: Skybox PRIMERO para que se renderice al fondo
+        std::vector<Mantrax::RenderObject> renderObjects = {object.renderObj, skyboxRenderObj};
+
+        loader->gfx->AddRenderObject(object.renderObj);
+        loader->gfx->AddRenderObject(skyboxRenderObj);
 
         Mantrax::Timer gameTimer;
 
@@ -370,16 +355,17 @@ int main()
         auto uiRenderGet = ServiceLocator::instance().get<UIRender>("UIRender");
         uiRenderGet->GetByType<SceneView>()->renderID = offscreen->renderID;
 
-        std::cout << "=== PBR METAL CUBE DEMO ===\n";
+        std::cout << "=== PBR MODEL VIEWER WITH SKYBOX ===\n";
         std::cout << "Right Click + WASD - Move camera\n";
         std::cout << "Mouse Wheel - Zoom\n";
         std::cout << "ESC - Exit\n";
-        std::cout << "=====================\n\n";
+        std::cout << "====================================\n\n";
 
         bool running = true;
         bool escPressed = false;
-        float cubeRotation = 0.0f;
+        float objectRotation = 0.0f;
 
+        // ============ GAME LOOP ============
         while (running)
         {
             if (!loader->window->ProcessMessages())
@@ -392,27 +378,38 @@ int main()
             float delta = gameTimer.GetDeltaTime();
             int fps = gameTimer.GetFPS();
 
-            // Rotar el cubo automáticamente
-            cubeRotation += delta * 20.0f;
-            cube.rotation.y = cubeRotation;
-
-            // Actualizar matriz del cubo
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), cube.position);
-            model = model * CreateRotationMatrix(cube.rotation);
-            model = glm::scale(model, cube.scale);
-
-            CopyMat4(cube.ubo.model, model);
-            CopyMat4(cube.ubo.view, camera.GetViewMatrix());
-            CopyMat4(cube.ubo.projection, camera.GetProjectionMatrix());
-
-            // NUEVO: Copiar posición de cámara
             glm::vec3 camPos = camera.GetPosition();
-            cube.ubo.cameraPosition[0] = camPos.x;
-            cube.ubo.cameraPosition[1] = camPos.y;
-            cube.ubo.cameraPosition[2] = camPos.z;
-            cube.ubo.cameraPosition[3] = 0.0f;
 
-            // Control de cámara
+            // ============ ACTUALIZAR SKYBOX (PRIMERO) ============
+            glm::mat4 skyboxModel = glm::mat4(1.0f); // Solo identidad
+
+            CopyMat4(skyboxUBO.model, skyboxModel);
+            CopyMat4(skyboxUBO.view, camera.GetViewMatrix());
+            CopyMat4(skyboxUBO.projection, camera.GetProjectionMatrix());
+
+            skyboxUBO.cameraPosition[0] = camPos.x;
+            skyboxUBO.cameraPosition[1] = camPos.y;
+            skyboxUBO.cameraPosition[2] = camPos.z;
+            skyboxUBO.cameraPosition[3] = 0.0f;
+
+            // ============ ACTUALIZAR OBJETO ============
+            objectRotation += delta * 20.0f;
+            object.rotation.y = objectRotation;
+
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), object.position);
+            model = model * CreateRotationMatrix(object.rotation);
+            model = glm::scale(model, object.scale);
+
+            CopyMat4(object.ubo.model, model);
+            CopyMat4(object.ubo.view, camera.GetViewMatrix());
+            CopyMat4(object.ubo.projection, camera.GetProjectionMatrix());
+
+            object.ubo.cameraPosition[0] = camPos.x;
+            object.ubo.cameraPosition[1] = camPos.y;
+            object.ubo.cameraPosition[2] = camPos.z;
+            object.ubo.cameraPosition[3] = 0.0f;
+
+            // ============ INPUT DE CÁMARA ============
             if (g_Input.rightMouseDown && g_SceneView && g_SceneView->IsHovered())
             {
                 bool sprint = g_Input.keyShift;
@@ -430,7 +427,6 @@ int main()
                     camera.ProcessKeyboard(Mantrax::DOWN, delta, sprint);
             }
 
-            // ESC para salir
             if (GetAsyncKeyState(VK_ESCAPE) & 0x8000)
             {
                 if (!escPressed)
@@ -445,7 +441,7 @@ int main()
                 escPressed = false;
             }
 
-            // Resize handling
+            // ============ RESIZE HANDLING ============
             if (renderView->CheckResize())
             {
                 loader->gfx->ResizeOffscreenFramebuffer(
@@ -467,10 +463,13 @@ int main()
                 renderView->ResetResizeFlag();
             }
 
-            // Render to offscreen
+            // ============ ACTUALIZAR UBOs ============
+            loader->gfx->UpdateMaterialUBO(skyboxMaterial.get(), skyboxUBO);
+            loader->gfx->UpdateMaterialUBO(object.material.get(), object.ubo);
+
+            // ============ RENDER ============
             loader->gfx->RenderToOffscreenFramebuffer(offscreen, renderObjects);
 
-            // Window resize
             if (loader->window->WasFramebufferResized())
             {
                 uint32_t w, h;
@@ -479,18 +478,14 @@ int main()
                 loader->window->ResetFramebufferResizedFlag();
             }
 
-            // Update UBO
-            loader->gfx->UpdateMaterialUBO(cube.material.get(), cube.ubo);
-
+            // ============ ImGui ============
             imgui.BeginFrame();
 
             ImGui::Begin("PBR Material Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-            // ============ PERFORMANCE ============
             ImGui::Text("FPS: %d | Delta: %.4f", fps, delta);
             ImGui::Separator();
 
-            // ============ CAMERA INFO ============
             if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 ImGui::Text("Position: (%.2f, %.2f, %.2f)",
@@ -498,7 +493,7 @@ int main()
                             camera.GetPosition().y,
                             camera.GetPosition().z);
 
-                ImGui::Text("Cube Rotation: %.1f°", cubeRotation);
+                ImGui::Text("Object Rotation: %.1f°", objectRotation);
 
                 if (ImGui::Button("Reset Camera", ImVec2(200, 0)))
                 {
@@ -512,20 +507,19 @@ int main()
 
             ImGui::Separator();
 
-            // ============ MATERIAL PROPERTIES ============
             if (ImGui::CollapsingHeader("Material Properties", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 static float normalScale = 1.0f;
                 ImGui::Text("Normal Map Intensity:");
                 if (ImGui::SliderFloat("##normal", &normalScale, 0.0f, 5.0f, "%.2f"))
                 {
-                    cube.material->SetNormalScale(normalScale);
+                    object.material->SetNormalScale(normalScale);
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Reset##normal"))
                 {
                     normalScale = 1.0f;
-                    cube.material->SetNormalScale(normalScale);
+                    object.material->SetNormalScale(normalScale);
                 }
 
                 ImGui::Spacing();
@@ -534,13 +528,13 @@ int main()
                 ImGui::Text("Metallic:");
                 if (ImGui::SliderFloat("##metallic", &metallic, 0.0f, 1.0f, "%.3f"))
                 {
-                    cube.material->SetMetallicFactor(metallic);
+                    object.material->SetMetallicFactor(metallic);
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Reset##metal"))
                 {
                     metallic = 1.0f;
-                    cube.material->SetMetallicFactor(metallic);
+                    object.material->SetMetallicFactor(metallic);
                 }
 
                 ImGui::Spacing();
@@ -549,13 +543,13 @@ int main()
                 ImGui::Text("Roughness:");
                 if (ImGui::SliderFloat("##roughness", &roughness, 0.0f, 1.0f, "%.3f"))
                 {
-                    cube.material->SetRoughnessFactor(roughness);
+                    object.material->SetRoughnessFactor(roughness);
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Reset##rough"))
                 {
                     roughness = 0.2f;
-                    cube.material->SetRoughnessFactor(roughness);
+                    object.material->SetRoughnessFactor(roughness);
                 }
 
                 ImGui::Spacing();
@@ -564,19 +558,18 @@ int main()
                 ImGui::Text("Color Tint:");
                 if (ImGui::ColorEdit3("##colortint", colorTint, ImGuiColorEditFlags_NoInputs))
                 {
-                    cube.material->SetBaseColor(colorTint[0], colorTint[1], colorTint[2]);
+                    object.material->SetBaseColor(colorTint[0], colorTint[1], colorTint[2]);
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Reset##color"))
                 {
                     colorTint[0] = colorTint[1] = colorTint[2] = 1.0f;
-                    cube.material->SetBaseColor(1.0f, 1.0f, 1.0f);
+                    object.material->SetBaseColor(1.0f, 1.0f, 1.0f);
                 }
             }
 
             ImGui::Separator();
 
-            // ============ MATERIAL PRESETS ============
             if (ImGui::CollapsingHeader("Material Presets"))
             {
                 static float normalScale = 1.0f;
@@ -588,10 +581,10 @@ int main()
                     normalScale = 0.5f;
                     metallic = 1.0f;
                     roughness = 0.1f;
-                    cube.material->SetNormalScale(normalScale);
-                    cube.material->SetMetallicFactor(metallic);
-                    cube.material->SetRoughnessFactor(roughness);
-                    cube.material->SetBaseColor(1.0f, 1.0f, 1.0f);
+                    object.material->SetNormalScale(normalScale);
+                    object.material->SetMetallicFactor(metallic);
+                    object.material->SetRoughnessFactor(roughness);
+                    object.material->SetBaseColor(1.0f, 1.0f, 1.0f);
                 }
 
                 if (ImGui::Button("Brushed Metal", ImVec2(200, 0)))
@@ -599,10 +592,10 @@ int main()
                     normalScale = 1.5f;
                     metallic = 1.0f;
                     roughness = 0.4f;
-                    cube.material->SetNormalScale(normalScale);
-                    cube.material->SetMetallicFactor(metallic);
-                    cube.material->SetRoughnessFactor(roughness);
-                    cube.material->SetBaseColor(1.0f, 1.0f, 1.0f);
+                    object.material->SetNormalScale(normalScale);
+                    object.material->SetMetallicFactor(metallic);
+                    object.material->SetRoughnessFactor(roughness);
+                    object.material->SetBaseColor(1.0f, 1.0f, 1.0f);
                 }
 
                 if (ImGui::Button("Gold", ImVec2(200, 0)))
@@ -610,10 +603,10 @@ int main()
                     normalScale = 0.8f;
                     metallic = 1.0f;
                     roughness = 0.2f;
-                    cube.material->SetNormalScale(normalScale);
-                    cube.material->SetMetallicFactor(metallic);
-                    cube.material->SetRoughnessFactor(roughness);
-                    cube.material->SetBaseColor(1.0f, 0.8f, 0.3f);
+                    object.material->SetNormalScale(normalScale);
+                    object.material->SetMetallicFactor(metallic);
+                    object.material->SetRoughnessFactor(roughness);
+                    object.material->SetBaseColor(1.0f, 0.8f, 0.3f);
                 }
 
                 if (ImGui::Button("Copper", ImVec2(200, 0)))
@@ -621,10 +614,10 @@ int main()
                     normalScale = 1.0f;
                     metallic = 1.0f;
                     roughness = 0.3f;
-                    cube.material->SetNormalScale(normalScale);
-                    cube.material->SetMetallicFactor(metallic);
-                    cube.material->SetRoughnessFactor(roughness);
-                    cube.material->SetBaseColor(0.95f, 0.6f, 0.4f);
+                    object.material->SetNormalScale(normalScale);
+                    object.material->SetMetallicFactor(metallic);
+                    object.material->SetRoughnessFactor(roughness);
+                    object.material->SetBaseColor(0.95f, 0.6f, 0.4f);
                 }
 
                 if (ImGui::Button("Rusty Metal", ImVec2(200, 0)))
@@ -632,32 +625,57 @@ int main()
                     normalScale = 2.0f;
                     metallic = 0.7f;
                     roughness = 0.8f;
-                    cube.material->SetNormalScale(normalScale);
-                    cube.material->SetMetallicFactor(metallic);
-                    cube.material->SetRoughnessFactor(roughness);
-                    cube.material->SetBaseColor(0.7f, 0.4f, 0.3f);
+                    object.material->SetNormalScale(normalScale);
+                    object.material->SetMetallicFactor(metallic);
+                    object.material->SetRoughnessFactor(roughness);
+                    object.material->SetBaseColor(0.7f, 0.4f, 0.3f);
                 }
+
                 if (ImGui::Button("Diamond Plate (Default)", ImVec2(200, 0)))
                 {
                     normalScale = 1.0f;
                     metallic = 1.0f;
                     roughness = 0.2f;
-                    cube.material->SetNormalScale(normalScale);
-                    cube.material->SetMetallicFactor(metallic);
-                    cube.material->SetRoughnessFactor(roughness);
-                    cube.material->SetBaseColor(1.0f, 1.0f, 1.0f);
+                    object.material->SetNormalScale(normalScale);
+                    object.material->SetMetallicFactor(metallic);
+                    object.material->SetRoughnessFactor(roughness);
+                    object.material->SetBaseColor(1.0f, 1.0f, 1.0f);
                 }
             }
-            ImGui::Separator(); // ============ TEXTURE INFO ============
+
+            ImGui::Separator();
+
+            if (ImGui::CollapsingHeader("Skybox"))
+            {
+                ImGui::Text("Skybox Radius: %.1f", skybox.GetRadius());
+                ImGui::Text("Segments: %d", skybox.GetSegments());
+                ImGui::Text("Rings: %d", skybox.GetRings());
+                ImGui::BulletText("Follows camera position");
+
+                static float skyboxBrightness = 2.0f;
+                if (ImGui::SliderFloat("Brightness", &skyboxBrightness, 0.1f, 5.0f, "%.2f"))
+                {
+                    skyboxMaterial->SetBaseColor(skyboxBrightness, skyboxBrightness, skyboxBrightness);
+                }
+            }
+
+            ImGui::Separator();
+
             if (ImGui::CollapsingHeader("Active Textures"))
             {
+                ImGui::Text("Object:");
                 ImGui::BulletText("Albedo Map");
                 ImGui::BulletText("Normal Map");
                 ImGui::BulletText("Metallic Map");
                 ImGui::BulletText("Roughness Map");
                 ImGui::BulletText("AO Map");
+                ImGui::Separator();
+                ImGui::Text("Environment:");
+                ImGui::BulletText("Skybox 360°");
             }
-            ImGui::Separator(); // ============ HELP ============
+
+            ImGui::Separator();
+
             if (ImGui::CollapsingHeader("Controls"))
             {
                 ImGui::TextWrapped("Right Click + WASD: Move camera");
@@ -666,12 +684,16 @@ int main()
                 ImGui::TextWrapped("Space/Ctrl: Up/Down");
                 ImGui::TextWrapped("ESC: Exit");
             }
+
             ImGui::End();
+
             uiRender->RenderAll();
             ImGui::Render();
+
             loader->gfx->DrawFrame([](VkCommandBuffer cmd)
                                    { ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd); });
         }
+
         g_SceneView = nullptr;
         g_Camera = nullptr;
     }
@@ -682,5 +704,6 @@ int main()
         MessageBoxA(nullptr, e.what(), "ERROR", MB_OK | MB_ICONERROR);
         return -1;
     }
+
     return 0;
 }

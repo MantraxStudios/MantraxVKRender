@@ -4,7 +4,7 @@ layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec3 fragNormal;
 layout(location = 3) in vec3 fragWorldPos;
-layout(location = 4) in vec3 fragCameraPos; // NUEVO
+layout(location = 4) in vec3 fragCameraPos;
 
 layout(location = 0) out vec4 outColor;
 
@@ -12,7 +12,7 @@ layout(binding = 0) uniform UniformBufferObject {
     mat4 model;
     mat4 view;
     mat4 projection;
-    vec4 cameraPosition; // NUEVO
+    vec4 cameraPosition;
 } ubo;
 
 // Texturas PBR
@@ -35,28 +35,28 @@ layout(push_constant) uniform MaterialProperties {
     int useAOMap;
 } material;
 
-// ============ CONFIGURACIÓN DE ILUMINACIÓN ============
+// ============ CONFIGURACIÓN DE ILUMINACIÓN REALISTA ============
 
-// Luz puntual principal (MÁS INTENSA para efecto mojado)
-const vec3 pointLightPos = vec3(5.0, 8.0, 10.0);
-const vec3 pointLightColor = vec3(1.0, 0.98, 0.95);
-const float pointLightIntensity = 250.0; // AUMENTADO
+// Luz direccional principal (simula sol/luz de estudio)
+const vec3 mainLightDir = normalize(vec3(-0.3, -0.7, -0.5));
+const vec3 mainLightColor = vec3(1.0, 0.98, 0.95);
+const float mainLightIntensity = 3.5;
 
-// Luz direccional 
-const vec3 dirLightDirection = normalize(vec3(-0.2, -0.8, -0.3));
-const vec3 dirLightColor = vec3(1.0, 0.98, 0.95);
-const float dirLightIntensity = 4.0; // AUMENTADO
+// Luz de relleno suave (simula rebote de luz)
+const vec3 fillLightDir = normalize(vec3(0.5, 0.3, 0.8));
+const vec3 fillLightColor = vec3(0.6, 0.65, 0.7);
+const float fillLightIntensity = 1.2;
 
-// Luz de relleno
-const vec3 fillLightDirection = normalize(vec3(0.5, 0.2, 0.8));
-const vec3 fillLightColor = vec3(0.7, 0.75, 0.8);
-const float fillLightIntensity = 1.5;
+// Luz trasera/rim (para definir siluetas)
+const vec3 rimLightDir = normalize(vec3(0.0, 0.2, 1.0));
+const vec3 rimLightColor = vec3(0.9, 0.95, 1.0);
+const float rimLightIntensity = 1.5;
 
-// Iluminación ambiental (oscura para contraste)
-const vec3 ambientSkyColor = vec3(0.20, 0.22, 0.25);
-const vec3 ambientGroundColor = vec3(0.10, 0.10, 0.11);
-const vec3 ambientSpecularColor = vec3(0.5, 0.55, 0.6); // MÁS BRILLANTE
-const float ambientIntensity = 0.2;
+// Iluminación ambiental (IBL simulado)
+const vec3 ambientColorTop = vec3(0.15, 0.18, 0.22);      // Cielo
+const vec3 ambientColorBottom = vec3(0.08, 0.08, 0.09);   // Suelo
+const vec3 ambientColorHorizon = vec3(0.12, 0.14, 0.16);  // Horizonte
+const float ambientIntensity = 0.4;
 
 const float PI = 3.14159265359;
 const float EPSILON = 0.0001;
@@ -86,6 +86,7 @@ vec3 GetNormalFromMap(mat3 TBN) {
 
 // ============ FUNCIONES PBR ============
 
+// Distribution (Specular D) - GGX/Trowbridge-Reitz
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float a = roughness * roughness;
     float a2 = a * a;
@@ -99,6 +100,7 @@ float DistributionGGX(vec3 N, vec3 H, float roughness) {
     return nom / max(denom, EPSILON);
 }
 
+// Geometry (Specular G) - Smith's Schlick-GGX
 float GeometrySchlickGGX(float NdotV, float roughness) {
     float r = (roughness + 1.0);
     float k = (r * r) / 8.0;
@@ -118,60 +120,86 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
     return ggx1 * ggx2;
 }
 
-vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
-    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-}
-
+// Fresnel (Specular F) - Schlick approximation
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-vec3 CalculateHemisphericAmbient(vec3 N, vec3 albedo, float metallic) {
-    float upness = N.y * 0.5 + 0.5;
-    vec3 ambient = mix(ambientGroundColor, ambientSkyColor, upness);
-    
-    // Los metales puros no tienen componente difusa, pero agregamos un mínimo
-    // para evitar negros absolutos
-    float diffuseContribution = mix(1.0, 0.15, metallic);
-    
-    return ambient * albedo * ambientIntensity * diffuseContribution;
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-vec3 CalculateSpecularIBL(vec3 N, vec3 V, vec3 F0, float roughness, float metallic) {
+// ============ ILUMINACIÓN AMBIENTAL AVANZADA ============
+
+vec3 CalculateRealisticAmbient(vec3 N, vec3 V, vec3 albedo, vec3 F0, float roughness, float metallic, float ao) {
+    // Componente difusa ambiental con gradiente hemisférico
+    float upFactor = N.y * 0.5 + 0.5;
+    float horizonFactor = (1.0 - abs(N.y)) * 0.5;
+    
+    vec3 ambientDiffuse = mix(
+        mix(ambientColorBottom, ambientColorHorizon, horizonFactor),
+        ambientColorTop,
+        upFactor
+    );
+    
+    // Los metales no tienen componente difusa
+    ambientDiffuse *= (1.0 - metallic);
+    
+    // Componente especular ambiental (simulación de IBL)
     vec3 R = reflect(-V, N);
-    
-    // Environment map brillante para efecto mojado
-    float upness = R.y * 0.5 + 0.5;
-    vec3 envColor = mix(ambientGroundColor, ambientSpecularColor, upness);
-    
-    // Múltiples highlights brillantes para simular reflexiones nítidas
-    float highlight1 = max(dot(R, normalize(vec3(0.4, 0.7, 0.5))), 0.0);
-    float highlight2 = max(dot(R, normalize(vec3(-0.3, 0.8, 0.2))), 0.0);
-    float highlight3 = max(dot(R, normalize(vec3(0.6, 0.5, -0.4))), 0.0);
-    
-    // Highlights muy intensos y nítidos (exponentes altos)
-    envColor += vec3(0.6, 0.65, 0.7) * pow(highlight1, 3.0);
-    envColor += vec3(0.4, 0.45, 0.5) * pow(highlight2, 4.0);
-    envColor += vec3(0.3, 0.35, 0.4) * pow(highlight3, 5.0);
-    
     float NdotV = max(dot(N, V), 0.0);
+    
+    // Simular diferentes LODs del environment map basado en roughness
+    float lod = roughness * 5.0;
+    
+    // Color del environment basado en la dirección de reflexión
+    float reflUpness = R.y * 0.5 + 0.5;
+    vec3 envColor = mix(ambientColorBottom, ambientColorTop, reflUpness);
+    
+    // Agregar highlights suaves para simular fuentes de luz en el environment
+    float highlight1 = max(dot(R, normalize(vec3(0.5, 0.8, 0.3))), 0.0);
+    float highlight2 = max(dot(R, normalize(vec3(-0.4, 0.6, -0.5))), 0.0);
+    
+    // Los highlights se vuelven más difusos con mayor roughness
+    float sharpness = mix(8.0, 2.0, roughness);
+    envColor += vec3(0.3, 0.32, 0.35) * pow(highlight1, sharpness);
+    envColor += vec3(0.2, 0.22, 0.25) * pow(highlight2, sharpness);
+    
+    // Fresnel para el specular ambiental
     vec3 F = fresnelSchlickRoughness(NdotV, F0, roughness);
     
-    // Mayor contribución especular = look más mojado/brillante
-    float smoothness = 1.0 - roughness;
-    float specularStrength = mix(0.3, 1.2, smoothness * smoothness);
+    // Aproximación de la integral especular
+    vec3 specularAmbient = envColor * F;
     
-    return envColor * F * specularStrength;
+    // Energy conservation
+    vec3 kD = (1.0 - F) * (1.0 - metallic);
+    
+    // Combinar difuso y especular
+    vec3 ambient = (kD * albedo * ambientDiffuse + specularAmbient) * ambientIntensity;
+    
+    // Aplicar AO
+    ambient *= ao;
+    
+    return ambient;
 }
 
-vec3 CalculatePBRLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, float metallic, float roughness, vec3 F0) {
+// ============ CÁLCULO DE LUZ DIRECTA PBR ============
+
+vec3 CalculatePBRLight(
+    vec3 N, vec3 V, vec3 L, 
+    vec3 radiance, 
+    vec3 albedo, 
+    float metallic, 
+    float roughness, 
+    vec3 F0
+) {
     vec3 H = normalize(V + L);
     
     float NdotL = max(dot(N, L), 0.0);
     float NdotV = max(dot(N, V), EPSILON);
     float HdotV = max(dot(H, V), 0.0);
     
-    // Para look "mojado", queremos reflejos especulares MUY intensos
+    // Cook-Torrance BRDF
     float NDF = DistributionGGX(N, H, roughness);
     float G = GeometrySmith(N, V, L, roughness);
     vec3 F = fresnelSchlick(HdotV, F0);
@@ -180,23 +208,19 @@ vec3 CalculatePBRLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, float
     float denominator = 4.0 * NdotV * NdotL + EPSILON;
     vec3 specular = numerator / denominator;
     
-    // Boost adicional al especular para efecto mojado
-    specular *= mix(1.0, 1.5, metallic);
-    
+    // Energy conservation
     vec3 kS = F;
-    vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - metallic;
+    vec3 kD = (1.0 - kS) * (1.0 - metallic);
     
+    // Lambertian diffuse + Cook-Torrance specular
     return (kD * albedo / PI + specular) * radiance * NdotL;
 }
 
 // ============ MAIN ============
 
 void main() {
-    // SOLUCIÓN SIMPLE: Usar la posición de cámara del uniform
+    // Vectores base
     vec3 camPos = fragCameraPos;
-    
-    // Normalizar vectores base
     vec3 N = normalize(fragNormal);
     vec3 V = normalize(camPos - fragWorldPos);
     
@@ -229,6 +253,7 @@ void main() {
     } else {
         metallic = material.metallicFactor;
     }
+    metallic = clamp(metallic, 0.0, 1.0);
     
     // Roughness
     float roughness;
@@ -237,7 +262,7 @@ void main() {
     } else {
         roughness = material.roughnessFactor;
     }
-    roughness = clamp(roughness, 0.02, 1.0);
+    roughness = clamp(roughness, 0.04, 1.0);
     
     // Ambient Occlusion
     float ao;
@@ -249,52 +274,47 @@ void main() {
     
     // ============ PBR LIGHTING ============
     
-    // F0 (reflectancia en incidencia normal)
-    // CLAVE: Para metales, F0 ES el color del albedo
-    // Para no-metales, F0 es ~0.04 (4% de reflexión)
+    // F0 (reflectancia base en incidencia normal)
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo, metallic);
     
+    // Acumulador de luz directa
     vec3 Lo = vec3(0.0);
     
-    // Luz direccional
-    vec3 L_dir = -dirLightDirection;
-    vec3 radiance_dir = dirLightColor * dirLightIntensity;
-    Lo += CalculatePBRLight(N, V, L_dir, radiance_dir, albedo, metallic, roughness, F0);
+    // Luz principal
+    vec3 L_main = -mainLightDir;
+    vec3 radiance_main = mainLightColor * mainLightIntensity;
+    Lo += CalculatePBRLight(N, V, L_main, radiance_main, albedo, metallic, roughness, F0);
     
     // Luz de relleno
-    vec3 L_fill = fillLightDirection;
+    vec3 L_fill = fillLightDir;
     vec3 radiance_fill = fillLightColor * fillLightIntensity;
     Lo += CalculatePBRLight(N, V, L_fill, radiance_fill, albedo, metallic, roughness, F0);
     
-    // Luz puntual
-    vec3 L_point = normalize(pointLightPos - fragWorldPos);
-    float distance = length(pointLightPos - fragWorldPos);
-    float attenuation = pointLightIntensity / (distance * distance);
-    vec3 radiance_point = pointLightColor * attenuation;
-    Lo += CalculatePBRLight(N, V, L_point, radiance_point, albedo, metallic, roughness, F0);
+    // Luz trasera/rim (sutil)
+    vec3 L_rim = rimLightDir;
+    vec3 radiance_rim = rimLightColor * rimLightIntensity;
+    float rimFactor = 1.0 - max(dot(N, V), 0.0);
+    rimFactor = pow(rimFactor, 3.0);
+    Lo += CalculatePBRLight(N, V, L_rim, radiance_rim * rimFactor, albedo, metallic, roughness, F0);
     
-    // Iluminación ambiental
-    vec3 ambient = CalculateHemisphericAmbient(N, albedo, metallic);
-    vec3 specularIBL = CalculateSpecularIBL(N, V, F0, roughness, metallic);
-    
-    // Combinar componente difusa y especular ambiental
-    ambient += specularIBL;
-    ambient *= ao;
+    // Iluminación ambiental realista (IBL simulado)
+    vec3 ambient = CalculateRealisticAmbient(N, V, albedo, F0, roughness, metallic, ao);
     
     // Composición final
     vec3 color = ambient + Lo;
     
-    // Tone mapping ACES
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    color = clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
+    // Tone mapping mejorado (ACES filmic)
+    color = color / (color + vec3(1.0));
+    
+    // Pequeño ajuste de exposición
+    color *= 1.0;
     
     // Gamma correction
     color = pow(color, vec3(1.0/2.2));
+    
+    // Clamp final
+    color = clamp(color, 0.0, 1.0);
     
     outColor = vec4(color, 1.0);
 }

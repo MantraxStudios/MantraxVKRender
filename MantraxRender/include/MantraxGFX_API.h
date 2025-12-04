@@ -116,8 +116,10 @@ namespace Mantrax
         VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
         VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
         VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS;
+        bool depthWriteEnable = true;
         bool depthTestEnable = true;
-        bool blendEnable = false;
+        bool blendEnable = true;
     };
 
     class Shader
@@ -706,6 +708,9 @@ namespace Mantrax
             scissor.extent = offscreen->extent;
             vkCmdSetScissor(cmd, 0, 1, &scissor);
 
+            // ✅ Track último pipeline
+            VkPipeline lastPipeline = VK_NULL_HANDLE;
+
             // Renderizar objetos
             for (const auto &obj : objects)
             {
@@ -718,8 +723,22 @@ namespace Mantrax
                 if (!obj.material->shader->pipeline)
                     continue;
 
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  obj.material->shader->pipeline);
+                // ✅ Bind pipeline solo si cambió
+                if (obj.material->shader->pipeline != lastPipeline)
+                {
+                    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                      obj.material->shader->pipeline);
+                    lastPipeline = obj.material->shader->pipeline;
+                }
+
+                // ✅ Push constants SIEMPRE (cada objeto tiene los suyos)
+                vkCmdPushConstants(
+                    cmd,
+                    obj.material->shader->pipelineLayout,
+                    VK_SHADER_STAGE_FRAGMENT_BIT,
+                    0,
+                    sizeof(MaterialPushConstants),
+                    &obj.material->pushConstants);
 
                 VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
                 VkDeviceSize offsets[] = {0};
@@ -2422,8 +2441,8 @@ namespace Mantrax
             VkPipelineDepthStencilStateCreateInfo ds{};
             ds.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
             ds.depthTestEnable = shader->config.depthTestEnable ? VK_TRUE : VK_FALSE;
-            ds.depthWriteEnable = VK_TRUE;
-            ds.depthCompareOp = VK_COMPARE_OP_LESS;
+            ds.depthWriteEnable = shader->config.depthWriteEnable ? VK_TRUE : VK_FALSE;
+            ds.depthCompareOp = shader->config.depthCompareOp;
 
             VkGraphicsPipelineCreateInfo pi{};
             pi.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -2588,6 +2607,10 @@ namespace Mantrax
 
             vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+            // Variable para trackear el último pipeline bindeado
+            VkPipeline lastPipeline = VK_NULL_HANDLE;
+            VkPipelineLayout lastLayout = VK_NULL_HANDLE;
+
             // Renderizar objetos
             for (const auto &obj : m_RenderObjects)
             {
@@ -2600,11 +2623,18 @@ namespace Mantrax
                 if (!obj.material->shader->pipeline)
                     continue;
 
-                // Bind pipeline
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  obj.material->shader->pipeline);
+                // ✅ CRÍTICO: Bind pipeline SOLO si cambió
+                // Esto asegura que cada objeto use su propio shader
+                if (obj.material->shader->pipeline != lastPipeline)
+                {
+                    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                      obj.material->shader->pipeline);
+                    lastPipeline = obj.material->shader->pipeline;
+                    lastLayout = obj.material->shader->pipelineLayout;
+                }
 
-                // NUEVO: Push constants para propiedades del material
+                // ✅ CRÍTICO: Push constants para propiedades del material
+                // Cada objeto debe enviar sus propios push constants
                 vkCmdPushConstants(
                     cmd,
                     obj.material->shader->pipelineLayout,

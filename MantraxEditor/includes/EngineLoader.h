@@ -14,7 +14,10 @@ public:
 
     Mantrax::ShaderConfig normalShaderConfig;
     Mantrax::ShaderConfig outlineShaderConfig;
+
+    Mantrax::ShaderConfig skyboxShaderConfig;
     std::shared_ptr<Mantrax::Shader> normalShader;
+    std::shared_ptr<Mantrax::Shader> skyboxShader;
     std::shared_ptr<Mantrax::Shader> outlineShader;
 
     std::string getName() override { return "EngineLoader"; }
