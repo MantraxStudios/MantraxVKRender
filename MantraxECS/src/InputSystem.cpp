@@ -1,7 +1,6 @@
 #include "../include/InputSystem.h"
 #include <iostream>
 
-// Macros para extraer coordenadas del mouse de LPARAM
 #ifndef GET_X_LPARAM
 #define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
 #endif
@@ -27,13 +26,13 @@ namespace Mantrax
 
         switch (msg)
         {
+        // ==================== TECLADO ====================
         case WM_KEYDOWN:
         {
             KeyCode key = VKToKeyCode(wp);
-            if (key != KeyCode(-1))
+            if (key != KeyCode::Unknown)
             {
-                int idx = KeyCodeToIndex(key);
-                m_Keys[idx].current = true;
+                m_KeyboardKeys[key].current = true;
             }
             break;
         }
@@ -41,53 +40,71 @@ namespace Mantrax
         case WM_KEYUP:
         {
             KeyCode key = VKToKeyCode(wp);
-            if (key != KeyCode(-1))
+            if (key != KeyCode::Unknown)
             {
-                int idx = KeyCodeToIndex(key);
-                m_Keys[idx].current = false;
+                m_KeyboardKeys[key].current = false;
             }
             break;
         }
 
+        // ==================== MOUSE BUTTONS ====================
         case WM_LBUTTONDOWN:
-            m_Keys[KeyCodeToIndex(KeyCode::LeftMouse)].current = true;
+            m_MouseButtons[static_cast<int>(MouseButton::Left)].current = true;
             break;
 
         case WM_LBUTTONUP:
-            m_Keys[KeyCodeToIndex(KeyCode::LeftMouse)].current = false;
+            m_MouseButtons[static_cast<int>(MouseButton::Left)].current = false;
             break;
 
         case WM_RBUTTONDOWN:
         {
-            m_Keys[KeyCodeToIndex(KeyCode::RightMouse)].current = true;
+            m_MouseButtons[static_cast<int>(MouseButton::Right)].current = true;
             m_MouseState.firstMouse = true;
             m_MouseState.delta = {0, 0};
-
             SetCapture(hwnd);
             break;
         }
 
         case WM_RBUTTONUP:
         {
-            m_Keys[KeyCodeToIndex(KeyCode::RightMouse)].current = false;
+            m_MouseButtons[static_cast<int>(MouseButton::Right)].current = false;
             m_MouseState.firstMouse = true;
             m_MouseState.delta = {0, 0};
-
             ReleaseCapture();
             break;
         }
 
         case WM_MBUTTONDOWN:
-            m_Keys[KeyCodeToIndex(KeyCode::MiddleMouse)].current = true;
+            m_MouseButtons[static_cast<int>(MouseButton::Middle)].current = true;
             break;
 
         case WM_MBUTTONUP:
-            m_Keys[KeyCodeToIndex(KeyCode::MiddleMouse)].current = false;
+            m_MouseButtons[static_cast<int>(MouseButton::Middle)].current = false;
             break;
 
+        case WM_XBUTTONDOWN:
+        {
+            int xbutton = GET_XBUTTON_WPARAM(wp);
+            if (xbutton == XBUTTON1)
+                m_MouseButtons[static_cast<int>(MouseButton::Button4)].current = true;
+            else if (xbutton == XBUTTON2)
+                m_MouseButtons[static_cast<int>(MouseButton::Button5)].current = true;
+            break;
+        }
+
+        case WM_XBUTTONUP:
+        {
+            int xbutton = GET_XBUTTON_WPARAM(wp);
+            if (xbutton == XBUTTON1)
+                m_MouseButtons[static_cast<int>(MouseButton::Button4)].current = false;
+            else if (xbutton == XBUTTON2)
+                m_MouseButtons[static_cast<int>(MouseButton::Button5)].current = false;
+            break;
+        }
+
+        // ==================== MOUSE MOVEMENT ====================
         case WM_MOUSEMOVE:
         {
-            // Extraer coordenadas directamente del LPARAM
             int xPos = GET_X_LPARAM(lp);
             int yPos = GET_Y_LPARAM(lp);
             POINT currentPos = {xPos, yPos};
@@ -102,12 +119,8 @@ namespace Mantrax
             }
 
             m_MouseState.position = currentPos;
-
-            // SOLUCIÓN: Sobrescribir en lugar de acumular
-            // Solo guardar el último delta, no acumular todos
             m_MouseState.delta.x = currentPos.x - m_MouseState.lastPosition.x;
             m_MouseState.delta.y = m_MouseState.lastPosition.y - currentPos.y;
-
             m_MouseState.lastPosition = currentPos;
             break;
         }
@@ -123,67 +136,89 @@ namespace Mantrax
 
     void InputSystem::Update()
     {
-        // Actualizar estado previo de teclas
-        for (int i = 0; i < 32; ++i)
+        // Actualizar estado previo de teclas del TECLADO
+        for (auto &pair : m_KeyboardKeys)
         {
-            m_Keys[i].previous = m_Keys[i].current;
+            pair.second.previous = pair.second.current;
         }
 
-        // Resetear deltas al FINAL del frame
+        // Actualizar estado previo de botones del MOUSE
+        for (int i = 0; i < 5; ++i)
+        {
+            m_MouseButtons[i].previous = m_MouseButtons[i].current;
+        }
+
+        // Resetear deltas al final del frame
         m_MouseState.delta = {0, 0};
         m_MouseState.wheelDelta = 0.0f;
     }
 
+    // ==================== TECLADO ====================
     bool InputSystem::IsKeyPressed(KeyCode key) const
     {
-        int idx = KeyCodeToIndex(key);
-        return m_Keys[idx].current && !m_Keys[idx].previous;
+        auto it = m_KeyboardKeys.find(key);
+        if (it == m_KeyboardKeys.end())
+            return false;
+        return it->second.current && !it->second.previous;
     }
 
     bool InputSystem::IsKeyHeld(KeyCode key) const
     {
-        int idx = KeyCodeToIndex(key);
-        return m_Keys[idx].current && m_Keys[idx].previous;
+        auto it = m_KeyboardKeys.find(key);
+        if (it == m_KeyboardKeys.end())
+            return false;
+        return it->second.current && it->second.previous;
     }
 
     bool InputSystem::IsKeyReleased(KeyCode key) const
     {
-        int idx = KeyCodeToIndex(key);
-        return !m_Keys[idx].current && m_Keys[idx].previous;
+        auto it = m_KeyboardKeys.find(key);
+        if (it == m_KeyboardKeys.end())
+            return false;
+        return !it->second.current && it->second.previous;
     }
 
     bool InputSystem::IsKeyDown(KeyCode key) const
     {
-        int idx = KeyCodeToIndex(key);
-        return m_Keys[idx].current;
+        auto it = m_KeyboardKeys.find(key);
+        if (it == m_KeyboardKeys.end())
+            return false;
+        return it->second.current;
     }
 
-    bool InputSystem::IsMouseButtonPressed(KeyCode button) const
+    // ==================== MOUSE ====================
+    bool InputSystem::IsMouseButtonPressed(MouseButton button) const
     {
-        return IsKeyPressed(button);
+        int idx = static_cast<int>(button);
+        return m_MouseButtons[idx].current && !m_MouseButtons[idx].previous;
     }
 
-    bool InputSystem::IsMouseButtonHeld(KeyCode button) const
+    bool InputSystem::IsMouseButtonHeld(MouseButton button) const
     {
-        return IsKeyHeld(button);
+        int idx = static_cast<int>(button);
+        return m_MouseButtons[idx].current && m_MouseButtons[idx].previous;
     }
 
-    bool InputSystem::IsMouseButtonReleased(KeyCode button) const
+    bool InputSystem::IsMouseButtonReleased(MouseButton button) const
     {
-        return IsKeyReleased(button);
+        int idx = static_cast<int>(button);
+        return !m_MouseButtons[idx].current && m_MouseButtons[idx].previous;
     }
 
-    bool InputSystem::IsMouseButtonDown(KeyCode button) const
+    bool InputSystem::IsMouseButtonDown(MouseButton button) const
     {
-        return IsKeyDown(button);
+        int idx = static_cast<int>(button);
+        return m_MouseButtons[idx].current;
     }
 
     void InputSystem::Reset()
     {
-        for (int i = 0; i < 32; ++i)
+        m_KeyboardKeys.clear();
+
+        for (int i = 0; i < 5; ++i)
         {
-            m_Keys[i].current = false;
-            m_Keys[i].previous = false;
+            m_MouseButtons[i].current = false;
+            m_MouseButtons[i].previous = false;
         }
 
         m_MouseState.position = {0, 0};
@@ -196,15 +231,13 @@ namespace Mantrax
     void InputSystem::PrintMouseState() const
     {
         std::cout << "Mouse State:" << std::endl;
-        std::cout << "  Position: (" << m_MouseState.position.x << ", " << m_MouseState.position.y << ")" << std::endl;
-        std::cout << "  Delta: (" << m_MouseState.delta.x << ", " << m_MouseState.delta.y << ")" << std::endl;
+        std::cout << "  Position: (" << m_MouseState.position.x << ", "
+                  << m_MouseState.position.y << ")" << std::endl;
+        std::cout << "  Delta: (" << m_MouseState.delta.x << ", "
+                  << m_MouseState.delta.y << ")" << std::endl;
         std::cout << "  Wheel: " << m_MouseState.wheelDelta << std::endl;
-        std::cout << "  Right Button: " << (IsMouseButtonDown(KeyCode::RightMouse) ? "Down" : "Up") << std::endl;
-    }
-
-    int InputSystem::KeyCodeToIndex(KeyCode key) const
-    {
-        return static_cast<int>(key);
+        std::cout << "  Right Button: "
+                  << (IsMouseButtonDown(MouseButton::Right) ? "Down" : "Up") << std::endl;
     }
 
     KeyCode InputSystem::VKToKeyCode(WPARAM vk) const
@@ -462,18 +495,6 @@ namespace Mantrax
             return KeyCode::Slash;
         case VK_OEM_3:
             return KeyCode::GraveAccent;
-
-        // Mouse
-        case VK_LBUTTON:
-            return KeyCode::LeftMouse;
-        case VK_RBUTTON:
-            return KeyCode::RightMouse;
-        case VK_MBUTTON:
-            return KeyCode::MiddleMouse;
-        case VK_XBUTTON1:
-            return KeyCode::MouseButton4;
-        case VK_XBUTTON2:
-            return KeyCode::MouseButton5;
 
         // Multimedia
         case VK_VOLUME_MUTE:

@@ -1,15 +1,18 @@
 #pragma once
 #include "../../MantraxRender/include/MantraxGFX_API.h"
 #include "../../MantraxEditor/includes/FPSCamera.h"
+#include "IService.h"
 #include "ModelManager.h"
 #include <vector>
 #include <memory>
 
-class SceneRenderer
+class SceneRenderer : public IService
 {
 public:
     SceneRenderer(Mantrax::GFX *gfx);
     ~SceneRenderer();
+
+    std::string getName() override { return "SceneRenderer"; }
 
     // Agregar objetos a la escena
     void AddObject(RenderableObject *obj);

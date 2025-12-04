@@ -1,7 +1,7 @@
 #pragma once
 #include "../MantraxRender/include/MainWinPlug.h"
 #include "../MantraxRender/include/MantraxGFX_API.h"
-#include "IService.h"
+#include "../../MantraxECS/include/IService.h"
 #include <memory>
 
 class EngineLoader : public IService

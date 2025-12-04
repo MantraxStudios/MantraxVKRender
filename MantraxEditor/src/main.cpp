@@ -6,7 +6,7 @@
 #include "../includes/EngineLoader.h"
 #include "../includes/UIRender.h"
 #include "../includes/ui/SceneView.h"
-#include "../includes/ServiceLocator.h"
+#include "../../MantraxECS/include/ServiceLocator.h"
 #include "../includes/ImGuiManager.h"
 #include "../MantraxECS/include/InputSystem.h"
 #include "../MantraxECS/include/ModelManager.h"
@@ -35,13 +35,13 @@ LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 void ProcessCameraInput(Mantrax::FPSCamera &camera, Mantrax::InputSystem &input, float deltaTime)
 {
-    // Solo procesar input si el botón derecho está presionado
-    if (!input.IsMouseButtonDown(Mantrax::KeyCode::RightMouse))
+    // ✅ CAMBIO 1: Usar MouseButton en lugar de KeyCode
+    if (!input.IsMouseButtonDown(Mantrax::MouseButton::Right))
         return;
 
     bool sprint = input.IsKeyDown(Mantrax::KeyCode::Shift);
 
-    // Movimiento con teclado
+    // Movimiento con teclado (sin cambios, usan KeyCode correctamente)
     if (input.IsKeyDown(Mantrax::KeyCode::W))
         camera.ProcessKeyboard(Mantrax::FORWARD, deltaTime, sprint);
 
@@ -60,7 +60,7 @@ void ProcessCameraInput(Mantrax::FPSCamera &camera, Mantrax::InputSystem &input,
     if (input.IsKeyDown(Mantrax::KeyCode::Ctrl))
         camera.ProcessKeyboard(Mantrax::DOWN, deltaTime, sprint);
 
-    // Movimiento del mouse
+    // Movimiento del mouse (sin cambios)
     POINT delta = input.GetMouseDelta();
     if (delta.x != 0 || delta.y != 0)
     {
@@ -69,7 +69,7 @@ void ProcessCameraInput(Mantrax::FPSCamera &camera, Mantrax::InputSystem &input,
             static_cast<float>(delta.y));
     }
 
-    // Scroll del mouse
+    // Scroll del mouse (sin cambios)
     float wheelDelta = input.GetMouseWheelDelta();
     if (wheelDelta != 0.0f)
     {
@@ -100,12 +100,15 @@ int main()
         Mantrax::ImGuiManager imgui(loader->window->GetHWND(), loader->gfx.get());
 
         // Crear sistema de input
-        Mantrax::InputSystem inputSystem;
-        g_InputSystem = &inputSystem;
+        ServiceLocator::instance().registerService("InputSystem", std::make_shared<Mantrax::InputSystem>());
+        auto inputLoader = ServiceLocator::instance().get<Mantrax::InputSystem>("InputSystem");
+        g_InputSystem = inputLoader.get();
+
+        ServiceLocator::instance().registerService("SceneRenderer", std::make_shared<SceneRenderer>(loader->gfx.get()));
+        auto sceneRenderer = ServiceLocator::instance().get<SceneRenderer>("SceneRenderer");
 
         // Crear managers
         ModelManager modelManager(loader->gfx.get());
-        SceneRenderer sceneRenderer(loader->gfx.get());
 
         // Cargar modelo con PBR
         auto cubeObj = modelManager.CreateModelWithPBR(
@@ -125,7 +128,7 @@ int main()
         }
 
         cubeObj->scale = glm::vec3(2.0f);
-        sceneRenderer.AddObject(cubeObj);
+        sceneRenderer->AddObject(cubeObj);
 
         // Crear Skybox
         Mantrax::SkyBox skybox(loader->gfx.get(), 1.0f, 32, 16);
@@ -151,7 +154,7 @@ int main()
         skyboxObj.rotation = glm::vec3(0.0f);
         skyboxObj.scale = glm::vec3(1.0f);
 
-        sceneRenderer.AddObject(&skyboxObj);
+        sceneRenderer->AddObject(&skyboxObj);
 
         // Configurar cámara
         Mantrax::FPSCamera camera(glm::vec3(0.0f, 0.0f, 5.0f), 60.0f, 0.1f, 1000.0f);
@@ -184,7 +187,6 @@ int main()
         while (running)
         {
             // 1. Procesar TODOS los mensajes de Windows disponibles
-            // Esto acumula eventos en el InputSystem
             if (!loader->window->ProcessMessages())
             {
                 running = false;
@@ -196,10 +198,8 @@ int main()
             float delta = gameTimer.GetDeltaTime();
             int fps = gameTimer.GetFPS();
 
-            // 3. ✅ USAR LOS INPUTS PRIMERO (antes de Update)
-            // Los deltas están acumulados desde ProcessMessages
-
-            if (inputSystem.IsKeyPressed(Mantrax::KeyCode::Escape))
+            // 3. Usar los inputs ANTES de Update
+            if (g_InputSystem->IsKeyPressed(Mantrax::KeyCode::Escape))
             {
                 running = false;
                 break;
@@ -209,12 +209,11 @@ int main()
             objectRotation += delta * 1.0f;
             cubeObj->rotation.y = objectRotation;
 
-            // Procesar input de cámara (USA deltas acumulados)
-            ProcessCameraInput(camera, inputSystem, delta);
+            // Procesar input de cámara
+            ProcessCameraInput(camera, *g_InputSystem, delta);
 
-            // 4. ✅ DESPUÉS actualizar InputSystem
-            // Esto actualiza previous state Y resetea deltas
-            inputSystem.Update();
+            // 4. Actualizar InputSystem (resetea deltas)
+            g_InputSystem->Update();
 
             // 5. Resize handling
             if (renderView->CheckResize())
@@ -235,8 +234,8 @@ int main()
             }
 
             // 6. Actualizar y renderizar escena
-            sceneRenderer.UpdateUBOs(&camera);
-            sceneRenderer.RenderScene(offscreen);
+            sceneRenderer->UpdateUBOs(&camera);
+            sceneRenderer->RenderScene(offscreen);
 
             // 7. Window resize handling
             if (loader->window->WasFramebufferResized())
@@ -280,10 +279,13 @@ int main()
                 ImGui::Text("Frame Time: %.2f ms", delta * 1000.0f);
                 ImGui::Text("FPS: %d", fps);
 
-                // NOTA: Estos deltas YA fueron reseteados por Update()
-                // Para debug, mover esta sección ANTES de Update()
+                // ✅ CAMBIO 2: Usar MouseButton para la UI también
                 ImGui::Text("Right Mouse: %s",
-                            inputSystem.IsMouseButtonDown(Mantrax::KeyCode::RightMouse) ? "DOWN" : "UP");
+                            g_InputSystem->IsMouseButtonDown(Mantrax::MouseButton::Right) ? "DOWN" : "UP");
+
+                // Debug adicional
+                ImGui::Text("Left Mouse: %s",
+                            g_InputSystem->IsMouseButtonDown(Mantrax::MouseButton::Left) ? "DOWN" : "UP");
             }
 
             ImGui::End();

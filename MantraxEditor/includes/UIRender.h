@@ -1,5 +1,5 @@
 #pragma once
-#include "IService.h"
+#include "../../MantraxECS/include/IService.h"
 #include "UIBehaviour.h"
 #include <vector>
 

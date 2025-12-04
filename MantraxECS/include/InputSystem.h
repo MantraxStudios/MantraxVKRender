@@ -1,6 +1,7 @@
 #pragma once
 #include <Windows.h>
-#include <functional>
+#include <unordered_map>
+#include "IService.h"
 
 namespace Mantrax
 {
@@ -59,7 +60,7 @@ namespace Mantrax
         Numpad9,
         NumpadMultiply,
         NumpadAdd,
-        NumpadSeparator, // Tecla Enter del numpad
+        NumpadSeparator,
         NumpadSubtract,
         NumpadDecimal,
         NumpadDivide,
@@ -127,9 +128,9 @@ namespace Mantrax
         PrintScreen,
         Pause,
 
-        // Símbolos fila superior
-        Minus,  // -
-        Equals, // =
+        // Símbolos
+        Minus,
+        Equals,
         BracketLeft,
         BracketRight,
         Backslash,
@@ -138,16 +139,9 @@ namespace Mantrax
         Comma,
         Period,
         Slash,
-        GraveAccent, // `
+        GraveAccent,
 
-        // Mouse
-        LeftMouse,
-        RightMouse,
-        MiddleMouse,
-        MouseButton4,
-        MouseButton5,
-
-        // Multimedia (opcional)
+        // Multimedia
         VolumeMute,
         VolumeDown,
         VolumeUp,
@@ -156,15 +150,16 @@ namespace Mantrax
         MediaPlayPause,
         MediaStop,
 
-        // Otros
         Unknown
     };
 
-    enum class InputState
+    enum class MouseButton
     {
-        Pressed,
-        Released,
-        Held
+        Left = 0,
+        Right = 1,
+        Middle = 2,
+        Button4 = 3,
+        Button5 = 4
     };
 
     struct MouseState
@@ -176,11 +171,14 @@ namespace Mantrax
         bool firstMouse;
     };
 
-    class InputSystem
+    class InputSystem : public IService
     {
     public:
         InputSystem();
         ~InputSystem();
+
+        // Implementación de IService
+        std::string getName() override { return "InputSystem"; }
 
         // Procesar mensajes de Windows
         void ProcessMessage(UINT msg, WPARAM wp, LPARAM lp, HWND hwnd);
@@ -188,17 +186,17 @@ namespace Mantrax
         // Actualizar estado (llamar cada frame)
         void Update();
 
-        // Queries de estado de teclas
+        // Queries de estado de teclas del TECLADO
         bool IsKeyPressed(KeyCode key) const;
         bool IsKeyHeld(KeyCode key) const;
         bool IsKeyReleased(KeyCode key) const;
         bool IsKeyDown(KeyCode key) const;
 
-        // Queries de mouse
-        bool IsMouseButtonPressed(KeyCode button) const;
-        bool IsMouseButtonHeld(KeyCode button) const;
-        bool IsMouseButtonReleased(KeyCode button) const;
-        bool IsMouseButtonDown(KeyCode button) const;
+        // Queries de MOUSE (ahora usan MouseButton)
+        bool IsMouseButtonPressed(MouseButton button) const;
+        bool IsMouseButtonHeld(MouseButton button) const;
+        bool IsMouseButtonReleased(MouseButton button) const;
+        bool IsMouseButtonDown(MouseButton button) const;
 
         // Obtener estado del mouse
         const MouseState &GetMouseState() const { return m_MouseState; }
@@ -223,12 +221,20 @@ namespace Mantrax
             bool previous = false;
         };
 
-        KeyState m_Keys[32];
+        struct MouseButtonState
+        {
+            bool current = false;
+            bool previous = false;
+        };
+
+        // SEPARACIÓN: Teclado usa mapa, Mouse usa array
+        std::unordered_map<KeyCode, KeyState> m_KeyboardKeys;
+        MouseButtonState m_MouseButtons[5]; // Left, Right, Middle, Button4, Button5
+
         MouseState m_MouseState;
         float m_MouseSensitivity;
-        HWND m_Hwnd; // AGREGAR ESTA LÍNEA
+        HWND m_Hwnd;
 
-        int KeyCodeToIndex(KeyCode key) const;
         KeyCode VKToKeyCode(WPARAM vk) const;
     };
 }
