@@ -12,9 +12,40 @@
 #include "../MantraxECS/include/ModelManager.h"
 #include "../MantraxECS/include/SceneRenderer.h"
 #include "../MantraxECS/include/TextureLoader.h"
+#include "../MantraxECS/include/ECS.h"
+#include "../MantraxECS/include/LuaScript.h"
+#include "../includes/LuaEditor.h"
 #include <iostream>
+#include <random>
 
-// Variables globales (solo para acceso desde WndProc)
+// ============================================================================
+// COMPONENTES DEL JUEGO
+// ============================================================================
+struct Transform
+{
+    glm::vec3 position{0.0f};
+    glm::vec3 rotation{0.0f};
+    glm::vec3 scale{1.0f};
+};
+
+struct Velocity
+{
+    glm::vec3 linear{0.0f};
+    glm::vec3 angular{0.0f};
+};
+
+struct RenderComponent
+{
+    RenderableObject *renderObject = nullptr;
+};
+
+struct Rotator
+{
+    float speed = 1.0f;
+    glm::vec3 axis{0.0f, 1.0f, 0.0f};
+};
+
+// Variables globales
 Mantrax::InputSystem *g_InputSystem = nullptr;
 Mantrax::FPSCamera *g_Camera = nullptr;
 SceneView *g_SceneView = nullptr;
@@ -24,7 +55,6 @@ LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wp, lp))
         return true;
 
-    // Delegar al sistema de input
     if (g_InputSystem)
     {
         g_InputSystem->ProcessMessage(msg, wp, lp, hwnd);
@@ -35,13 +65,11 @@ LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 void ProcessCameraInput(Mantrax::FPSCamera &camera, Mantrax::InputSystem &input, float deltaTime)
 {
-    // ✅ CAMBIO 1: Usar MouseButton en lugar de KeyCode
     if (!input.IsMouseButtonDown(Mantrax::MouseButton::Right))
         return;
 
     bool sprint = input.IsKeyDown(Mantrax::KeyCode::Shift);
 
-    // Movimiento con teclado (sin cambios, usan KeyCode correctamente)
     if (input.IsKeyDown(Mantrax::KeyCode::W))
         camera.ProcessKeyboard(Mantrax::FORWARD, deltaTime, sprint);
 
@@ -60,7 +88,6 @@ void ProcessCameraInput(Mantrax::FPSCamera &camera, Mantrax::InputSystem &input,
     if (input.IsKeyDown(Mantrax::KeyCode::Ctrl))
         camera.ProcessKeyboard(Mantrax::DOWN, deltaTime, sprint);
 
-    // Movimiento del mouse (sin cambios)
     POINT delta = input.GetMouseDelta();
     if (delta.x != 0 || delta.y != 0)
     {
@@ -69,11 +96,47 @@ void ProcessCameraInput(Mantrax::FPSCamera &camera, Mantrax::InputSystem &input,
             static_cast<float>(delta.y));
     }
 
-    // Scroll del mouse (sin cambios)
     float wheelDelta = input.GetMouseWheelDelta();
     if (wheelDelta != 0.0f)
     {
         camera.ProcessMouseScroll(wheelDelta * 2.0f);
+    }
+}
+
+// ============================================================================
+// SISTEMAS DEL JUEGO
+// ============================================================================
+
+// Sistema que actualiza rotaciones
+void UpdateRotationSystem(ecs::Registry &registry, float deltaTime)
+{
+    for (auto [entity, transform, rotator] : registry.view<Transform, Rotator>())
+    {
+        transform.rotation += rotator.axis * rotator.speed * deltaTime;
+    }
+}
+
+// Sistema que aplica velocidades
+void UpdatePhysicsSystem(ecs::Registry &registry, float deltaTime)
+{
+    for (auto [entity, transform, velocity] : registry.view<Transform, Velocity>())
+    {
+        transform.position += velocity.linear * deltaTime;
+        transform.rotation += velocity.angular * deltaTime;
+    }
+}
+
+// Sistema que sincroniza Transform con RenderableObject
+void SyncRenderSystem(ecs::Registry &registry)
+{
+    for (auto [entity, transform, render] : registry.view<Transform, RenderComponent>())
+    {
+        if (render.renderObject)
+        {
+            render.renderObject->position = transform.position;
+            render.renderObject->rotation = transform.rotation;
+            render.renderObject->scale = transform.scale;
+        }
     }
 }
 
@@ -99,7 +162,6 @@ int main()
 
         Mantrax::ImGuiManager imgui(loader->window->GetHWND(), loader->gfx.get());
 
-        // Crear sistema de input
         ServiceLocator::instance().registerService("InputSystem", std::make_shared<Mantrax::InputSystem>());
         auto inputLoader = ServiceLocator::instance().get<Mantrax::InputSystem>("InputSystem");
         g_InputSystem = inputLoader.get();
@@ -107,28 +169,69 @@ int main()
         ServiceLocator::instance().registerService("SceneRenderer", std::make_shared<SceneRenderer>(loader->gfx.get()));
         auto sceneRenderer = ServiceLocator::instance().get<SceneRenderer>("SceneRenderer");
 
-        // Crear managers
         ModelManager modelManager(loader->gfx.get());
 
-        // Cargar modelo con PBR
-        auto cubeObj = modelManager.CreateModelWithPBR(
-            "Cube.fbx",
-            "MainCube",
-            "textures/DiamondPlate008A_1K-PNG_Color.png",
-            "textures/DiamondPlate008A_1K-PNG_NormalGL.png",
-            "textures/DiamondPlate008A_1K-PNG_Metalness.png",
-            "textures/DiamondPlate008A_1K-PNG_Roughness.png",
-            "textures/DiamondPlate008A_1K-PNG_AmbientOcclusion.png",
-            loader->normalShader);
+        ecs::Registry registry;
 
-        if (!cubeObj)
+        std::vector<RenderableObject *> renderObjects;
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<float> posDist(-10.0f, 10.0f);
+        std::uniform_real_distribution<float> speedDist(0.5f, 2.0f);
+
+        // Crear 10 cubos con diferentes posiciones y velocidades
+        for (int i = 0; i < 10; i++)
         {
-            std::cerr << "Failed to load cube model!" << std::endl;
-            return -1;
+            // Crear el modelo
+            auto cubeObj = modelManager.CreateModelWithPBR(
+                "Cube.fbx",
+                "Cube_" + std::to_string(i),
+                "textures/DiamondPlate008A_1K-PNG_Color.png",
+                "textures/DiamondPlate008A_1K-PNG_NormalGL.png",
+                "textures/DiamondPlate008A_1K-PNG_Metalness.png",
+                "textures/DiamondPlate008A_1K-PNG_Roughness.png",
+                "textures/DiamondPlate008A_1K-PNG_AmbientOcclusion.png",
+                loader->normalShader);
+
+            if (!cubeObj)
+                continue;
+
+            renderObjects.push_back(cubeObj);
+            sceneRenderer->AddObject(cubeObj);
+
+            // Crear entidad en el ECS
+            auto entity = registry.createEntity();
+
+            // Agregar componente Transform con posición aleatoria
+            Transform &transform = registry.addComponent<Transform>(entity);
+            transform.position = glm::vec3(posDist(gen), posDist(gen), posDist(gen));
+            transform.scale = glm::vec3(1.0f + (i * 0.2f)); // Escala variable
+
+            // Agregar componente Rotator con velocidad aleatoria
+            Rotator &rotator = registry.addComponent<Rotator>(entity);
+            rotator.speed = speedDist(gen);
+            rotator.axis = glm::normalize(glm::vec3(
+                posDist(gen),
+                posDist(gen),
+                posDist(gen)));
+
+            // Agregar componente RenderComponent
+            RenderComponent &render = registry.addComponent<RenderComponent>(entity);
+            render.renderObject = cubeObj;
+
+            // Algunos objetos tendrán velocidad lineal
+            if (i % 3 == 0)
+            {
+                Velocity &velocity = registry.addComponent<Velocity>(entity);
+                velocity.linear = glm::vec3(
+                    posDist(gen) * 0.5f,
+                    posDist(gen) * 0.5f,
+                    posDist(gen) * 0.5f);
+                velocity.angular = glm::vec3(0.0f, speedDist(gen), 0.0f);
+            }
         }
 
-        cubeObj->scale = glm::vec3(2.0f);
-        sceneRenderer->AddObject(cubeObj);
+        std::cout << "\n✅ Created " << renderObjects.size() << " entities with ECS\n";
 
         // Crear Skybox
         Mantrax::SkyBox skybox(loader->gfx.get(), 1.0f, 32, 16);
@@ -157,7 +260,7 @@ int main()
         sceneRenderer->AddObject(&skyboxObj);
 
         // Configurar cámara
-        Mantrax::FPSCamera camera(glm::vec3(0.0f, 0.0f, 5.0f), 60.0f, 0.1f, 1000.0f);
+        Mantrax::FPSCamera camera(glm::vec3(0.0f, 5.0f, 20.0f), 60.0f, 0.1f, 1000.0f);
         camera.SetAspectRatio(1920.0f / 1080.0f);
         camera.SetMovementSpeed(5.0f);
         camera.SetMouseSensitivity(0.1f);
@@ -175,47 +278,60 @@ int main()
 
         Mantrax::Timer gameTimer;
         bool running = true;
-        float objectRotation = 0.0f;
 
-        std::cout << "\n=== PBR MODEL VIEWER ===\n";
+        std::cout << "\n=== ECS PBR MODEL VIEWER ===\n";
         std::cout << "Right Click + WASD - Move camera\n";
         std::cout << "Mouse Wheel - Zoom\n";
         std::cout << "ESC - Exit\n";
-        std::cout << "========================\n\n";
+        std::cout << "===========================\n\n";
 
-        // ==================== GAME LOOP OPTIMIZADO ====================
+        try
+        {
+            LuaScript script("script.lua");
+
+            // Variable global que Lua podrá leer
+            script.setGlobal("x", 10);
+
+            int resultado = script.callIntFunction("doblar", 5);
+            std::cout << "Resultado desde Lua: " << resultado << "\n";
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "Excepción: " << e.what() << "\n";
+            return 1;
+        }
+
+        LuaEditor luae;
+
+        // ==================== GAME LOOP ====================
         while (running)
         {
-            // 1. Procesar TODOS los mensajes de Windows disponibles
             if (!loader->window->ProcessMessages())
             {
                 running = false;
                 break;
             }
 
-            // 2. Actualizar timer
             gameTimer.Update();
             float delta = gameTimer.GetDeltaTime();
             int fps = gameTimer.GetFPS();
 
-            // 3. Usar los inputs ANTES de Update
             if (g_InputSystem->IsKeyPressed(Mantrax::KeyCode::Escape))
             {
                 running = false;
                 break;
             }
 
-            // Rotar objeto
-            objectRotation += delta * 1.0f;
-            cubeObj->rotation.y = objectRotation;
+            // ✅ ACTUALIZAR SISTEMAS DEL ECS
+            UpdateRotationSystem(registry, delta);
+            UpdatePhysicsSystem(registry, delta);
+            SyncRenderSystem(registry);
 
             // Procesar input de cámara
             ProcessCameraInput(camera, *g_InputSystem, delta);
-
-            // 4. Actualizar InputSystem (resetea deltas)
             g_InputSystem->Update();
 
-            // 5. Resize handling
+            // Resize handling
             if (renderView->CheckResize())
             {
                 loader->gfx->ResizeOffscreenFramebuffer(
@@ -233,11 +349,11 @@ int main()
                 renderView->ResetResizeFlag();
             }
 
-            // 6. Actualizar y renderizar escena
+            // Actualizar y renderizar escena
             sceneRenderer->UpdateUBOs(&camera);
             sceneRenderer->RenderScene(offscreen);
 
-            // 7. Window resize handling
+            // Window resize handling
             if (loader->window->WasFramebufferResized())
             {
                 uint32_t w, h;
@@ -246,18 +362,42 @@ int main()
                 loader->window->ResetFramebufferResizedFlag();
             }
 
-            // 8. ImGui UI
+            // ImGui UI
             imgui.BeginFrame();
 
-            ImGui::Begin("PBR Material Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+            luae.Render();
+
+            ImGui::Begin("ECS Scene Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
             ImGui::Text("FPS: %d | Delta: %.4f ms", fps, delta * 1000.0f);
             ImGui::Separator();
+
+            if (ImGui::CollapsingHeader("ECS Statistics", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::Text("Total Objects: %zu", renderObjects.size());
+
+                // Contar entidades con cada componente
+                int transformCount = 0;
+                int rotatorCount = 0;
+                int velocityCount = 0;
+
+                for (auto [entity, transform] : registry.view<Transform>())
+                    transformCount++;
+
+                for (auto [entity, rotator] : registry.view<Rotator>())
+                    rotatorCount++;
+
+                for (auto [entity, velocity] : registry.view<Velocity>())
+                    velocityCount++;
+
+                ImGui::Text("Entities with Transform: %d", transformCount);
+                ImGui::Text("Entities with Rotator: %d", rotatorCount);
+                ImGui::Text("Entities with Velocity: %d", velocityCount);
+            }
 
             if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 glm::vec3 pos = camera.GetPosition();
                 ImGui::Text("Position: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
-                ImGui::Text("Object Rotation: %.1f°", objectRotation);
 
                 float speed = camera.GetMovementSpeed();
                 if (ImGui::SliderFloat("Camera Speed", &speed, 1.0f, 20.0f))
@@ -267,7 +407,7 @@ int main()
 
                 if (ImGui::Button("Reset Camera", ImVec2(200, 0)))
                 {
-                    camera = Mantrax::FPSCamera(glm::vec3(0.0f, 0.0f, 5.0f), 60.0f, 0.1f, 1000.0f);
+                    camera = Mantrax::FPSCamera(glm::vec3(0.0f, 5.0f, 20.0f), 60.0f, 0.1f, 1000.0f);
                     camera.SetAspectRatio(static_cast<float>(renderView->width) / static_cast<float>(renderView->height));
                     camera.SetMovementSpeed(5.0f);
                     camera.SetMouseSensitivity(0.1f);
@@ -278,14 +418,8 @@ int main()
             {
                 ImGui::Text("Frame Time: %.2f ms", delta * 1000.0f);
                 ImGui::Text("FPS: %d", fps);
-
-                // ✅ CAMBIO 2: Usar MouseButton para la UI también
                 ImGui::Text("Right Mouse: %s",
                             g_InputSystem->IsMouseButtonDown(Mantrax::MouseButton::Right) ? "DOWN" : "UP");
-
-                // Debug adicional
-                ImGui::Text("Left Mouse: %s",
-                            g_InputSystem->IsMouseButtonDown(Mantrax::MouseButton::Left) ? "DOWN" : "UP");
             }
 
             ImGui::End();
@@ -293,7 +427,6 @@ int main()
             uiRender->RenderAll();
             ImGui::Render();
 
-            // 9. Draw final frame
             loader->gfx->DrawFrame([](VkCommandBuffer cmd)
                                    { ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd); });
         }

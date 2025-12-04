@@ -17,9 +17,11 @@ add_executable(MantraxApp WIN32 ${ADDON_SOURCES})
 
 # Incluir directorios de encabezados
 target_include_directories(MantraxApp PRIVATE 
-    ${CMAKE_SOURCE_DIR}              # Directorio raíz del proyecto
-    ../MantraxRender/include                # Directorio de los encabezados de Vulkan
-    ../MantraxAddons/include                # Directorio de los encabezados de Vulkan
+    ${CMAKE_SOURCE_DIR}           
+    ../MantraxRender/include                
+    ../MantraxAddons/include               
+    ../MantraxECS/include              
+    ../MantraxECS/include/lua           
 )
 
 if(MSVC)
@@ -33,7 +35,7 @@ endif()
 link_directories(../MantraxRender/libs)     # Directorio de las bibliotecas de Vulkan
 
 # Buscar todos los archivos .lib en el directorio ../render/libs
-file(GLOB LIBS "../MantraxRender/libs/*.lib ../MantraxAddons/libs/*.lib")
+file(GLOB LIBS "../MantraxRender/libs/*.lib ../MantraxAddons/libs/*.lib ../MantraxECS/libs/*.lib")
 
 # Enlazar con las bibliotecas de DirectX 12
 target_link_libraries(MantraxApp 
@@ -61,4 +63,6 @@ target_link_libraries(MantraxApp
 target_link_libraries(MantraxApp
     "${CMAKE_SOURCE_DIR}/../MantraxRender/libs/vulkan-1.lib"
     "${CMAKE_SOURCE_DIR}/../MantraxAddons/libs/assimp-vc143-mt.lib"
+    "${CMAKE_SOURCE_DIR}/../MantraxECS/libs/lua-5.4.4.lib"
+    "${CMAKE_SOURCE_DIR}/../MantraxECS/libs/lua54.lib"
 )
