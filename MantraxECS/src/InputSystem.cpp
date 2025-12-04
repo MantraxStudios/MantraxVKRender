@@ -1,6 +1,14 @@
 #include "../include/InputSystem.h"
 #include <iostream>
 
+// Macros para extraer coordenadas del mouse de LPARAM
+#ifndef GET_X_LPARAM
+#define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
+#endif
+#ifndef GET_Y_LPARAM
+#define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
+#endif
+
 namespace Mantrax
 {
     InputSystem::InputSystem()
@@ -20,23 +28,22 @@ namespace Mantrax
         switch (msg)
         {
         case WM_KEYDOWN:
-        {
-            KeyCode key = VKToKeyCode(wp);
-            if (key != KeyCode(-1))
+            if (!(lp & 0x40000000)) // Ignorar repeticiones de tecla
             {
-                int idx = KeyCodeToIndex(key);
-                m_Keys[idx].current = true;
+                KeyCode key = VKToKeyCode(wp);
+                if (key != KeyCode::Unknown)
+                {
+                    m_Keys[KeyCodeToIndex(key)].current = true;
+                }
             }
             break;
-        }
 
         case WM_KEYUP:
         {
             KeyCode key = VKToKeyCode(wp);
-            if (key != KeyCode(-1))
+            if (key != KeyCode::Unknown)
             {
-                int idx = KeyCodeToIndex(key);
-                m_Keys[idx].current = false;
+                m_Keys[KeyCodeToIndex(key)].current = false;
             }
             break;
         }
@@ -52,8 +59,14 @@ namespace Mantrax
         case WM_RBUTTONDOWN:
         {
             m_Keys[KeyCodeToIndex(KeyCode::RightMouse)].current = true;
+
+            // Resetear posición y delta para evitar saltos
+            int xPos = GET_X_LPARAM(lp);
+            int yPos = GET_Y_LPARAM(lp);
+            m_MouseState.position = {xPos, yPos};
+            m_MouseState.lastPosition = {xPos, yPos};
+            m_MouseState.delta = {0, 0};
             m_MouseState.firstMouse = true;
-            m_MouseState.delta = {0, 0}; // Reset delta
 
             SetCapture(hwnd);
             break;
@@ -62,8 +75,10 @@ namespace Mantrax
         case WM_RBUTTONUP:
         {
             m_Keys[KeyCodeToIndex(KeyCode::RightMouse)].current = false;
+
+            // Resetear delta al soltar
+            m_MouseState.delta = {0, 0};
             m_MouseState.firstMouse = true;
-            m_MouseState.delta = {0, 0}; // Reset delta
 
             ReleaseCapture();
             break;
@@ -79,30 +94,27 @@ namespace Mantrax
 
         case WM_MOUSEMOVE:
         {
-            POINT currentPos;
-            GetCursorPos(&currentPos);
-            ScreenToClient(hwnd, &currentPos);
+            int xPos = GET_X_LPARAM(lp);
+            int yPos = GET_Y_LPARAM(lp);
 
             if (m_MouseState.firstMouse)
             {
-                m_MouseState.lastPosition = currentPos;
-                m_MouseState.position = currentPos;
+                m_MouseState.lastPosition = {xPos, yPos};
+                m_MouseState.position = {xPos, yPos};
                 m_MouseState.delta = {0, 0};
                 m_MouseState.firstMouse = false;
                 break;
             }
 
-            m_MouseState.position = currentPos;
-            m_MouseState.delta.x = currentPos.x - m_MouseState.lastPosition.x;
-            m_MouseState.delta.y = m_MouseState.lastPosition.y - currentPos.y;
-            m_MouseState.lastPosition = currentPos;
+            // Solo guardar la última posición, sin cálculos
+            m_MouseState.position = {xPos, yPos};
             break;
         }
 
         case WM_MOUSEWHEEL:
         {
             float delta = GET_WHEEL_DELTA_WPARAM(wp) / 120.0f;
-            m_MouseState.wheelDelta = delta;
+            m_MouseState.wheelDelta += delta;
             break;
         }
         }
@@ -116,11 +128,14 @@ namespace Mantrax
             m_Keys[i].previous = m_Keys[i].current;
         }
 
-        // IMPORTANTE: Resetear delta aquí
-        // El delta solo debe ser válido por un frame
-        m_MouseState.delta = {0, 0};
+        // Calcular el delta una vez por frame
+        m_MouseState.delta.x = m_MouseState.position.x - m_MouseState.lastPosition.x;
+        m_MouseState.delta.y = m_MouseState.lastPosition.y - m_MouseState.position.y;
 
-        // Reset wheel delta
+        // Actualizar lastPosition
+        m_MouseState.lastPosition = m_MouseState.position;
+
+        // Resetear wheel delta
         m_MouseState.wheelDelta = 0.0f;
     }
 
@@ -255,7 +270,7 @@ namespace Mantrax
         case 'Z':
             return KeyCode::Z;
 
-        // Números fila superior
+        // Números
         case '0':
             return KeyCode::Num0;
         case '1':
@@ -311,7 +326,7 @@ namespace Mantrax
         case VK_DIVIDE:
             return KeyCode::NumpadDivide;
 
-        // Función F1–F24
+        // Función
         case VK_F1:
             return KeyCode::F1;
         case VK_F2:
@@ -407,7 +422,7 @@ namespace Mantrax
         case VK_RWIN:
             return KeyCode::RWin;
 
-        // Teclas especiales
+        // Especiales
         case VK_ESCAPE:
             return KeyCode::Escape;
         case VK_SPACE:
@@ -418,7 +433,6 @@ namespace Mantrax
             return KeyCode::Enter;
         case VK_BACK:
             return KeyCode::Backspace;
-
         case VK_CAPITAL:
             return KeyCode::CapsLock;
         case VK_SCROLL:

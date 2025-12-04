@@ -21,16 +21,19 @@ SceneView *g_SceneView = nullptr;
 
 LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    // 1. Dejar que ImGui procese primero
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wp, lp))
         return true;
 
-    // Delegar al sistema de input
+    // 2. Procesar en nuestro InputSystem
     if (g_InputSystem)
     {
         g_InputSystem->ProcessMessage(msg, wp, lp, hwnd);
     }
 
-    return 0;
+    // 3. ✅ CRÍTICO: Llamar a DefWindowProc para los mensajes que no manejamos
+    // Esto le dice a Windows que el mensaje fue procesado correctamente
+    return DefWindowProc(hwnd, msg, wp, lp);
 }
 
 void ProcessCameraInput(Mantrax::FPSCamera &camera, Mantrax::InputSystem &input, float deltaTime)
@@ -38,10 +41,6 @@ void ProcessCameraInput(Mantrax::FPSCamera &camera, Mantrax::InputSystem &input,
     // Solo procesar input si el botón derecho está presionado
     if (!input.IsMouseButtonDown(Mantrax::KeyCode::RightMouse))
         return;
-
-    // Opcionalmente puedes verificar si estamos sobre la vista
-    // if (!g_SceneView || !g_SceneView->IsHovered())
-    //     return;
 
     bool sprint = input.IsKeyDown(Mantrax::KeyCode::Shift);
 
@@ -184,20 +183,25 @@ int main()
         std::cout << "ESC - Exit\n";
         std::cout << "========================\n\n";
 
-        // GAME LOOP
+        // ==================== GAME LOOP OPTIMIZADO ====================
         while (running)
         {
+            // 1. Procesar TODOS los mensajes de Windows disponibles
+            // Esto acumula eventos en el InputSystem
             if (!loader->window->ProcessMessages())
             {
                 running = false;
                 break;
             }
 
+            // 2. Actualizar timer
             gameTimer.Update();
             float delta = gameTimer.GetDeltaTime();
             int fps = gameTimer.GetFPS();
 
-            // Salir con ESC
+            // 3. ✅ USAR LOS INPUTS PRIMERO (antes de Update)
+            // Los deltas están acumulados desde ProcessMessages
+
             if (inputSystem.IsKeyPressed(Mantrax::KeyCode::Escape))
             {
                 running = false;
@@ -205,16 +209,17 @@ int main()
             }
 
             // Rotar objeto
-            objectRotation += delta * 20.0f;
+            objectRotation += delta * 1.0f;
             cubeObj->rotation.y = objectRotation;
 
-            // IMPORTANTE: Procesar input ANTES de Update()
+            // Procesar input de cámara (USA deltas acumulados)
             ProcessCameraInput(camera, inputSystem, delta);
 
-            // DESPUÉS actualizar el sistema (esto resetea los deltas)
+            // 4. ✅ DESPUÉS actualizar InputSystem
+            // Esto actualiza previous state Y resetea deltas
             inputSystem.Update();
 
-            // Resize handling
+            // 5. Resize handling
             if (renderView->CheckResize())
             {
                 loader->gfx->ResizeOffscreenFramebuffer(
@@ -232,10 +237,11 @@ int main()
                 renderView->ResetResizeFlag();
             }
 
-            // Actualizar y renderizar
+            // 6. Actualizar y renderizar escena
             sceneRenderer.UpdateUBOs(&camera);
             sceneRenderer.RenderScene(offscreen);
 
+            // 7. Window resize handling
             if (loader->window->WasFramebufferResized())
             {
                 uint32_t w, h;
@@ -244,11 +250,11 @@ int main()
                 loader->window->ResetFramebufferResizedFlag();
             }
 
-            // ImGui
+            // 8. ImGui UI
             imgui.BeginFrame();
 
             ImGui::Begin("PBR Material Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-            ImGui::Text("FPS: %d | Delta: %.4f", fps, delta);
+            ImGui::Text("FPS: %d | Delta: %.4f ms", fps, delta * 1000.0f);
             ImGui::Separator();
 
             if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
@@ -256,6 +262,12 @@ int main()
                 glm::vec3 pos = camera.GetPosition();
                 ImGui::Text("Position: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
                 ImGui::Text("Object Rotation: %.1f°", objectRotation);
+
+                float speed = camera.GetMovementSpeed();
+                if (ImGui::SliderFloat("Camera Speed", &speed, 1.0f, 20.0f))
+                {
+                    camera.SetMovementSpeed(speed);
+                }
 
                 if (ImGui::Button("Reset Camera", ImVec2(200, 0)))
                 {
@@ -266,19 +278,36 @@ int main()
                 }
             }
 
+            if (ImGui::CollapsingHeader("Performance"))
+            {
+                ImGui::Text("Frame Time: %.2f ms", delta * 1000.0f);
+                ImGui::Text("FPS: %d", fps);
+
+                // NOTA: Estos deltas YA fueron reseteados por Update()
+                // Para debug, mover esta sección ANTES de Update()
+                ImGui::Text("Right Mouse: %s",
+                            inputSystem.IsMouseButtonDown(Mantrax::KeyCode::RightMouse) ? "DOWN" : "UP");
+            }
+
             ImGui::End();
 
             uiRender->RenderAll();
             ImGui::Render();
 
+            // 9. Draw final frame
             loader->gfx->DrawFrame([](VkCommandBuffer cmd)
                                    { ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd); });
         }
+        // ==================== FIN GAME LOOP ====================
 
         // Cleanup
         g_SceneView = nullptr;
         g_Camera = nullptr;
         g_InputSystem = nullptr;
+
+        delete renderView;
+
+        std::cout << "\nShutting down cleanly...\n";
     }
     catch (const std::exception &e)
     {

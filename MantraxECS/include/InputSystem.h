@@ -227,6 +227,7 @@ namespace Mantrax
         MouseState m_MouseState;
         float m_MouseSensitivity;
         HWND m_Hwnd; // AGREGAR ESTA LÍNEA
+        bool m_SkipMouseEvents;
 
         int KeyCodeToIndex(KeyCode key) const;
         KeyCode VKToKeyCode(WPARAM vk) const;
