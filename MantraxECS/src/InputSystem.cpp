@@ -28,22 +28,23 @@ namespace Mantrax
         switch (msg)
         {
         case WM_KEYDOWN:
-            if (!(lp & 0x40000000)) // Ignorar repeticiones de tecla
+        {
+            KeyCode key = VKToKeyCode(wp);
+            if (key != KeyCode(-1))
             {
-                KeyCode key = VKToKeyCode(wp);
-                if (key != KeyCode::Unknown)
-                {
-                    m_Keys[KeyCodeToIndex(key)].current = true;
-                }
+                int idx = KeyCodeToIndex(key);
+                m_Keys[idx].current = true;
             }
             break;
+        }
 
         case WM_KEYUP:
         {
             KeyCode key = VKToKeyCode(wp);
-            if (key != KeyCode::Unknown)
+            if (key != KeyCode(-1))
             {
-                m_Keys[KeyCodeToIndex(key)].current = false;
+                int idx = KeyCodeToIndex(key);
+                m_Keys[idx].current = false;
             }
             break;
         }
@@ -59,14 +60,8 @@ namespace Mantrax
         case WM_RBUTTONDOWN:
         {
             m_Keys[KeyCodeToIndex(KeyCode::RightMouse)].current = true;
-
-            // Resetear posición y delta para evitar saltos
-            int xPos = GET_X_LPARAM(lp);
-            int yPos = GET_Y_LPARAM(lp);
-            m_MouseState.position = {xPos, yPos};
-            m_MouseState.lastPosition = {xPos, yPos};
-            m_MouseState.delta = {0, 0};
             m_MouseState.firstMouse = true;
+            m_MouseState.delta = {0, 0};
 
             SetCapture(hwnd);
             break;
@@ -75,10 +70,8 @@ namespace Mantrax
         case WM_RBUTTONUP:
         {
             m_Keys[KeyCodeToIndex(KeyCode::RightMouse)].current = false;
-
-            // Resetear delta al soltar
-            m_MouseState.delta = {0, 0};
             m_MouseState.firstMouse = true;
+            m_MouseState.delta = {0, 0};
 
             ReleaseCapture();
             break;
@@ -94,20 +87,28 @@ namespace Mantrax
 
         case WM_MOUSEMOVE:
         {
+            // Extraer coordenadas directamente del LPARAM
             int xPos = GET_X_LPARAM(lp);
             int yPos = GET_Y_LPARAM(lp);
+            POINT currentPos = {xPos, yPos};
 
             if (m_MouseState.firstMouse)
             {
-                m_MouseState.lastPosition = {xPos, yPos};
-                m_MouseState.position = {xPos, yPos};
+                m_MouseState.lastPosition = currentPos;
+                m_MouseState.position = currentPos;
                 m_MouseState.delta = {0, 0};
                 m_MouseState.firstMouse = false;
                 break;
             }
 
-            // Solo guardar la última posición, sin cálculos
-            m_MouseState.position = {xPos, yPos};
+            m_MouseState.position = currentPos;
+
+            // SOLUCIÓN: Sobrescribir en lugar de acumular
+            // Solo guardar el último delta, no acumular todos
+            m_MouseState.delta.x = currentPos.x - m_MouseState.lastPosition.x;
+            m_MouseState.delta.y = m_MouseState.lastPosition.y - currentPos.y;
+
+            m_MouseState.lastPosition = currentPos;
             break;
         }
 
@@ -128,14 +129,8 @@ namespace Mantrax
             m_Keys[i].previous = m_Keys[i].current;
         }
 
-        // Calcular el delta una vez por frame
-        m_MouseState.delta.x = m_MouseState.position.x - m_MouseState.lastPosition.x;
-        m_MouseState.delta.y = m_MouseState.lastPosition.y - m_MouseState.position.y;
-
-        // Actualizar lastPosition
-        m_MouseState.lastPosition = m_MouseState.position;
-
-        // Resetear wheel delta
+        // Resetear deltas al FINAL del frame
+        m_MouseState.delta = {0, 0};
         m_MouseState.wheelDelta = 0.0f;
     }
 
@@ -270,7 +265,7 @@ namespace Mantrax
         case 'Z':
             return KeyCode::Z;
 
-        // Números
+        // Números fila superior
         case '0':
             return KeyCode::Num0;
         case '1':
@@ -326,7 +321,7 @@ namespace Mantrax
         case VK_DIVIDE:
             return KeyCode::NumpadDivide;
 
-        // Función
+        // Función F1–F24
         case VK_F1:
             return KeyCode::F1;
         case VK_F2:
@@ -422,7 +417,7 @@ namespace Mantrax
         case VK_RWIN:
             return KeyCode::RWin;
 
-        // Especiales
+        // Teclas especiales
         case VK_ESCAPE:
             return KeyCode::Escape;
         case VK_SPACE:

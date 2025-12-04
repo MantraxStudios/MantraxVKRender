@@ -21,19 +21,16 @@ SceneView *g_SceneView = nullptr;
 
 LRESULT CustomWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
-    // 1. Dejar que ImGui procese primero
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wp, lp))
         return true;
 
-    // 2. Procesar en nuestro InputSystem
+    // Delegar al sistema de input
     if (g_InputSystem)
     {
         g_InputSystem->ProcessMessage(msg, wp, lp, hwnd);
     }
 
-    // 3. ✅ CRÍTICO: Llamar a DefWindowProc para los mensajes que no manejamos
-    // Esto le dice a Windows que el mensaje fue procesado correctamente
-    return DefWindowProc(hwnd, msg, wp, lp);
+    return 0;
 }
 
 void ProcessCameraInput(Mantrax::FPSCamera &camera, Mantrax::InputSystem &input, float deltaTime)
