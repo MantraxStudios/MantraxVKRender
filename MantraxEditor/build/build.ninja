@@ -119,6 +119,46 @@ build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAd
   TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
   TARGET_PDB = MantraxApp.pdb
 
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/InputSystem.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/InputSystem.cpp || cmake_object_order_depends_target_MantraxApp
+  CONFIG = Debug
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src\InputSystem.cpp.obj.d
+  FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxRender/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxAddons/include
+  OBJECT_DIR = CMakeFiles\MantraxApp.dir
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src
+  TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
+  TARGET_PDB = MantraxApp.pdb
+
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/ModelManager.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/ModelManager.cpp || cmake_object_order_depends_target_MantraxApp
+  CONFIG = Debug
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src\ModelManager.cpp.obj.d
+  FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxRender/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxAddons/include
+  OBJECT_DIR = CMakeFiles\MantraxApp.dir
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src
+  TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
+  TARGET_PDB = MantraxApp.pdb
+
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SceneRenderer.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SceneRenderer.cpp || cmake_object_order_depends_target_MantraxApp
+  CONFIG = Debug
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src\SceneRenderer.cpp.obj.d
+  FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxRender/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxAddons/include
+  OBJECT_DIR = CMakeFiles\MantraxApp.dir
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src
+  TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
+  TARGET_PDB = MantraxApp.pdb
+
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/stb_image_impl.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/stb_image_impl.cpp || cmake_object_order_depends_target_MantraxApp
+  CONFIG = Debug
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src\stb_image_impl.cpp.obj.d
+  FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxRender/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxAddons/include
+  OBJECT_DIR = CMakeFiles\MantraxApp.dir
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src
+  TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
+  TARGET_PDB = MantraxApp.pdb
+
 build CMakeFiles/MantraxApp.dir/src/EngineLoader.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/src/EngineLoader.cpp || cmake_object_order_depends_target_MantraxApp
   CONFIG = Debug
   DEP_FILE = CMakeFiles\MantraxApp.dir\src\EngineLoader.cpp.obj.d
@@ -157,7 +197,7 @@ build CMakeFiles/MantraxApp.dir/src/ui/SceneView.cpp.obj: CXX_COMPILER__MantraxA
 #############################################
 # Link the executable MantraxApp.exe
 
-build MantraxApp.exe: CXX_EXECUTABLE_LINKER__MantraxApp_Debug CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_demo.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_draw.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_impl_vulkan.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_impl_win32.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_tables.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_widgets.cpp.obj CMakeFiles/MantraxApp.dir/src/EngineLoader.cpp.obj CMakeFiles/MantraxApp.dir/src/main.cpp.obj CMakeFiles/MantraxApp.dir/src/ui/SceneView.cpp.obj | C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxRender/libs/vulkan-1.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxAddons/libs/assimp-vc143-mt.lib
+build MantraxApp.exe: CXX_EXECUTABLE_LINKER__MantraxApp_Debug CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_demo.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_draw.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_impl_vulkan.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_impl_win32.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_tables.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_widgets.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/InputSystem.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/ModelManager.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SceneRenderer.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/stb_image_impl.cpp.obj CMakeFiles/MantraxApp.dir/src/EngineLoader.cpp.obj CMakeFiles/MantraxApp.dir/src/main.cpp.obj CMakeFiles/MantraxApp.dir/src/ui/SceneView.cpp.obj | C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxRender/libs/vulkan-1.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxAddons/libs/assimp-vc143-mt.lib
   CONFIG = Debug
   FLAGS = -O0 -g -Xclang -gcodeview -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
   LINK_FLAGS = -Xlinker /subsystem:windows -fuse-ld=lld-link

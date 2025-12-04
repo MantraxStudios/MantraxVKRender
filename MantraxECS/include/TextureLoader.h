@@ -4,7 +4,6 @@
 #include <memory>
 
 // STB Image - Incluir en tu proyecto
-#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 namespace Mantrax
