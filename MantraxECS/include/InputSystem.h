@@ -6,17 +6,158 @@ namespace Mantrax
 {
     enum class KeyCode
     {
-        W,
+        // Letras
         A,
-        S,
+        B,
+        C,
         D,
-        Space,
+        E,
+        F,
+        G,
+        H,
+        I,
+        J,
+        K,
+        L,
+        M,
+        N,
+        O,
+        P,
+        Q,
+        R,
+        S,
+        T,
+        U,
+        V,
+        W,
+        X,
+        Y,
+        Z,
+
+        // Números fila superior
+        Num0,
+        Num1,
+        Num2,
+        Num3,
+        Num4,
+        Num5,
+        Num6,
+        Num7,
+        Num8,
+        Num9,
+
+        // Teclas del teclado numérico (Numpad)
+        Numpad0,
+        Numpad1,
+        Numpad2,
+        Numpad3,
+        Numpad4,
+        Numpad5,
+        Numpad6,
+        Numpad7,
+        Numpad8,
+        Numpad9,
+        NumpadMultiply,
+        NumpadAdd,
+        NumpadSeparator, // Tecla Enter del numpad
+        NumpadSubtract,
+        NumpadDecimal,
+        NumpadDivide,
+
+        // Teclas de función
+        F1,
+        F2,
+        F3,
+        F4,
+        F5,
+        F6,
+        F7,
+        F8,
+        F9,
+        F10,
+        F11,
+        F12,
+        F13,
+        F14,
+        F15,
+        F16,
+        F17,
+        F18,
+        F19,
+        F20,
+        F21,
+        F22,
+        F23,
+        F24,
+
+        // Navegación
+        Left,
+        Right,
+        Up,
+        Down,
+        PageUp,
+        PageDown,
+        Home,
+        End,
+        Insert,
+        Delete,
+
+        // Modificadores
         Shift,
         Ctrl,
+        Alt,
+        LShift,
+        RShift,
+        LCtrl,
+        RCtrl,
+        LAlt,
+        RAlt,
+        LWin,
+        RWin,
+
+        // Caracteres especiales
         Escape,
+        Space,
+        Tab,
+        Enter,
+        Backspace,
+        CapsLock,
+        ScrollLock,
+        NumLock,
+        PrintScreen,
+        Pause,
+
+        // Símbolos fila superior
+        Minus,  // -
+        Equals, // =
+        BracketLeft,
+        BracketRight,
+        Backslash,
+        Semicolon,
+        Apostrophe,
+        Comma,
+        Period,
+        Slash,
+        GraveAccent, // `
+
+        // Mouse
         LeftMouse,
         RightMouse,
-        MiddleMouse
+        MiddleMouse,
+        MouseButton4,
+        MouseButton5,
+
+        // Multimedia (opcional)
+        VolumeMute,
+        VolumeDown,
+        VolumeUp,
+        MediaNext,
+        MediaPrevious,
+        MediaPlayPause,
+        MediaStop,
+
+        // Otros
+        Unknown
     };
 
     enum class InputState
