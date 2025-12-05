@@ -121,6 +121,51 @@ void ModelManager::DestroyModel(RenderableObject *obj)
     }
 }
 
+// En ModelManager.h
+RenderableObject *CreateModelOnly(
+    const std::string &modelPath,
+    const std::string &name);
+
+// En ModelManager.cpp
+RenderableObject *ModelManager::CreateModelOnly(
+    const std::string &modelPath,
+    const std::string &name)
+{
+    std::vector<Mantrax::Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    Mantrax::AssimpLoader::LoadSettings settings;
+    settings.triangulate = true;
+    settings.genNormals = true;
+    settings.flipUVs = true;
+    settings.calcTangents = true;
+
+    std::cout << "Loading model (geometry only): " << modelPath << std::endl;
+
+    if (!m_modelLoader.LoadModel(modelPath, vertices, indices, settings, true))
+    {
+        std::cerr << "ERROR: " << m_modelLoader.GetLastError() << std::endl;
+        return nullptr;
+    }
+
+    auto mesh = m_gfx->CreateMesh(vertices, indices);
+
+    auto obj = std::make_unique<RenderableObject>();
+    obj->position = glm::vec3(0.0f);
+    obj->rotation = glm::vec3(0.0f);
+    obj->scale = glm::vec3(1.0f);
+    obj->material = nullptr; // Se asignará después
+    obj->renderObj.mesh = mesh;
+    obj->renderObj.material = nullptr; // Se asignará después
+    obj->name = name;
+
+    auto ptr = obj.get();
+    m_models.push_back(std::move(obj));
+
+    std::cout << "Model geometry '" << name << "' loaded (no material)!" << std::endl;
+    return ptr;
+}
+
 RenderableObject *ModelManager::GetModel(const std::string &name)
 {
     auto it = std::find_if(m_models.begin(), m_models.end(),

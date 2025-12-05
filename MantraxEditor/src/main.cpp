@@ -107,7 +107,6 @@ void ProcessCameraInput(Mantrax::FPSCamera &camera, Mantrax::InputSystem &input,
 // SISTEMAS DEL JUEGO
 // ============================================================================
 
-// Sistema que actualiza rotaciones
 void UpdateRotationSystem(ecs::Registry &registry, float deltaTime)
 {
     for (auto [entity, transform, rotator] : registry.view<Transform, Rotator>())
@@ -116,7 +115,6 @@ void UpdateRotationSystem(ecs::Registry &registry, float deltaTime)
     }
 }
 
-// Sistema que aplica velocidades
 void UpdatePhysicsSystem(ecs::Registry &registry, float deltaTime)
 {
     for (auto [entity, transform, velocity] : registry.view<Transform, Velocity>())
@@ -126,7 +124,6 @@ void UpdatePhysicsSystem(ecs::Registry &registry, float deltaTime)
     }
 }
 
-// Sistema que sincroniza Transform con RenderableObject
 void SyncRenderSystem(ecs::Registry &registry)
 {
     for (auto [entity, transform, render] : registry.view<Transform, RenderComponent>())
@@ -155,7 +152,6 @@ int main()
 
     try
     {
-        // Inicializar servicios
         ServiceLocator::instance().registerService("EngineLoader", std::make_shared<EngineLoader>());
         auto loader = ServiceLocator::instance().get<EngineLoader>("EngineLoader");
         loader->Start(hInst, CustomWndProc);
@@ -174,27 +170,99 @@ int main()
         ecs::Registry registry;
 
         std::vector<RenderableObject *> renderObjects;
+        std::vector<std::shared_ptr<Mantrax::Material>> individualMaterials; // ✅ Para mantener los materiales vivos
+
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> posDist(-10.0f, 10.0f);
-        std::uniform_real_distribution<float> speedDist(0.5f, 2.0f);
 
-        // Crear 10 cubos con diferentes posiciones y velocidades
-        for (int i = 0; i < 10; i++)
+        std::uniform_real_distribution<float> posDist(-50.0f, 50.0f);
+        std::uniform_real_distribution<float> heightDist(0.0f, 30.0f);
+        std::uniform_real_distribution<float> speedDist(0.3f, 1.5f);
+        std::uniform_real_distribution<float> scaleDist(0.5f, 2.0f);
+
+        std::cout << "\n🚀 Loading SHARED PBR textures...\n";
+
+        // ============================================================================
+        // ✅ CARGAR TEXTURAS PBR UNA SOLA VEZ (COMPARTIDAS)
+        // ============================================================================
+        int width, height, channels;
+        stbi_set_flip_vertically_on_load(true);
+
+        unsigned char *colorData = stbi_load("textures/DiamondPlate008A_1K-PNG_Color.png",
+                                             &width, &height, &channels, STBI_rgb_alpha);
+        auto colorTexture = loader->gfx->CreateTexture(colorData, width, height);
+        stbi_image_free(colorData);
+
+        unsigned char *normalData = stbi_load("textures/DiamondPlate008A_1K-PNG_NormalGL.png",
+                                              &width, &height, &channels, STBI_rgb_alpha);
+        auto normalTexture = loader->gfx->CreateTexture(normalData, width, height);
+        stbi_image_free(normalData);
+
+        unsigned char *metallicData = stbi_load("textures/DiamondPlate008A_1K-PNG_Metalness.png",
+                                                &width, &height, &channels, STBI_rgb_alpha);
+        auto metallicTexture = loader->gfx->CreateTexture(metallicData, width, height);
+        stbi_image_free(metallicData);
+
+        unsigned char *roughnessData = stbi_load("textures/DiamondPlate008A_1K-PNG_Roughness.png",
+                                                 &width, &height, &channels, STBI_rgb_alpha);
+        auto roughnessTexture = loader->gfx->CreateTexture(roughnessData, width, height);
+        stbi_image_free(roughnessData);
+
+        unsigned char *aoData = stbi_load("textures/DiamondPlate008A_1K-PNG_AmbientOcclusion.png",
+                                          &width, &height, &channels, STBI_rgb_alpha);
+        auto aoTexture = loader->gfx->CreateTexture(aoData, width, height);
+        stbi_image_free(aoData);
+
+        std::cout << "✅ Shared PBR textures loaded successfully!\n";
+        std::cout << "\n🚀 Creating 300 objects with SHARED textures...\n";
+
+        auto startTime = std::chrono::high_resolution_clock::now();
+
+        const int OBJECT_COUNT = 300;
+
+        for (int i = 0; i < OBJECT_COUNT; i++)
         {
-            // Crear el modelo
-            auto cubeObj = modelManager.CreateModelWithPBR(
+            if (i % 50 == 0)
+            {
+                std::cout << "  Progress: " << i << "/" << OBJECT_COUNT << " objects created...\n";
+            }
+
+            // ✅ Crear el modelo con geometría
+            auto cubeObj = modelManager.CreateModelOnly(
                 "Cube.fbx",
-                "Cube_" + std::to_string(i),
-                "textures/DiamondPlate008A_1K-PNG_Color.png",
-                "textures/DiamondPlate008A_1K-PNG_NormalGL.png",
-                "textures/DiamondPlate008A_1K-PNG_Metalness.png",
-                "textures/DiamondPlate008A_1K-PNG_Roughness.png",
-                "textures/DiamondPlate008A_1K-PNG_AmbientOcclusion.png",
-                loader->normalShader);
+                "Cube_" + std::to_string(i));
 
             if (!cubeObj)
+            {
+                std::cerr << "❌ Failed to create object " << i << std::endl;
                 continue;
+            }
+
+            // ============================================================================
+            // ✅ CREAR MATERIAL INDIVIDUAL PARA CADA OBJETO (con su propio UBO)
+            // Pero compartiendo el SHADER y las TEXTURAS
+            // ============================================================================
+            auto individualMaterial = loader->gfx->CreateMaterial(loader->normalShader);
+            individualMaterial->SetMetallicFactor(1.0f);
+            individualMaterial->SetRoughnessFactor(2.0f);
+            individualMaterial->SetNormalScale(5.0f);
+
+            // ✅ Asignar las TEXTURAS COMPARTIDAS al material individual
+            loader->gfx->SetMaterialPBRTextures(
+                individualMaterial,
+                colorTexture,     // ✅ Textura compartida
+                normalTexture,    // ✅ Textura compartida
+                metallicTexture,  // ✅ Textura compartida
+                roughnessTexture, // ✅ Textura compartida
+                aoTexture         // ✅ Textura compartida
+            );
+
+            // ✅ Asignar el material individual al objeto
+            cubeObj->material = individualMaterial;
+            cubeObj->renderObj.material = individualMaterial;
+
+            // ✅ Guardar referencia al material para que no se destruya
+            individualMaterials.push_back(individualMaterial);
 
             renderObjects.push_back(cubeObj);
             sceneRenderer->AddObject(cubeObj);
@@ -202,12 +270,18 @@ int main()
             // Crear entidad en el ECS
             auto entity = registry.createEntity();
 
-            // Agregar componente Transform con posición aleatoria
             Transform &transform = registry.addComponent<Transform>(entity);
-            transform.position = glm::vec3(posDist(gen), posDist(gen), posDist(gen));
-            transform.scale = glm::vec3(1.0f + (i * 0.2f)); // Escala variable
 
-            // Agregar componente Rotator con velocidad aleatoria
+            float angle = (i * 137.5f) * (3.14159f / 180.0f);
+            float radius = sqrtf(static_cast<float>(i)) * 3.0f;
+
+            transform.position = glm::vec3(
+                cos(angle) * radius + posDist(gen) * 0.1f,
+                heightDist(gen),
+                sin(angle) * radius + posDist(gen) * 0.1f);
+
+            transform.scale = glm::vec3(scaleDist(gen));
+
             Rotator &rotator = registry.addComponent<Rotator>(entity);
             rotator.speed = speedDist(gen);
             rotator.axis = glm::normalize(glm::vec3(
@@ -215,28 +289,30 @@ int main()
                 posDist(gen),
                 posDist(gen)));
 
-            // Agregar componente RenderComponent
             RenderComponent &render = registry.addComponent<RenderComponent>(entity);
             render.renderObject = cubeObj;
 
-            // Algunos objetos tendrán velocidad lineal
-            if (i % 3 == 0)
+            if (i % 5 == 0)
             {
                 Velocity &velocity = registry.addComponent<Velocity>(entity);
                 velocity.linear = glm::vec3(
-                    posDist(gen) * 0.5f,
-                    posDist(gen) * 0.5f,
-                    posDist(gen) * 0.5f);
-                velocity.angular = glm::vec3(0.0f, speedDist(gen), 0.0f);
+                    posDist(gen) * 0.2f,
+                    posDist(gen) * 0.1f,
+                    posDist(gen) * 0.2f);
+                velocity.angular = glm::vec3(0.0f, speedDist(gen) * 0.5f, 0.0f);
             }
         }
 
-        std::cout << "\n✅ Created " << renderObjects.size() << " entities with ECS\n";
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+
+        std::cout << "\n✅ Created " << renderObjects.size() << " objects in " << duration.count() << "ms\n";
+        std::cout << "💡 Optimization: 1 shader + 5 shared textures for all " << OBJECT_COUNT << " objects!\n";
+        std::cout << "   (Each object has its own UBO for transforms)\n";
 
         // Crear Skybox
         Mantrax::SkyBox skybox(loader->gfx.get(), 1.0f, 32, 16);
 
-        int width, height, channels;
         stbi_set_flip_vertically_on_load(true);
         unsigned char *skyboxData = stbi_load("textures/skybox.jpg", &width, &height, &channels, STBI_rgb_alpha);
         auto skyboxTexture = loader->gfx->CreateTexture(skyboxData, width, height);
@@ -259,14 +335,12 @@ int main()
 
         sceneRenderer->AddObject(&skyboxObj);
 
-        // Configurar cámara
-        Mantrax::FPSCamera camera(glm::vec3(0.0f, 5.0f, 20.0f), 60.0f, 0.1f, 1000.0f);
+        Mantrax::FPSCamera camera(glm::vec3(0.0f, 30.0f, 80.0f), 60.0f, 0.1f, 1000.0f);
         camera.SetAspectRatio(1540.0f / 948.0f);
-        camera.SetMovementSpeed(5.0f);
+        camera.SetMovementSpeed(15.0f);
         camera.SetMouseSensitivity(0.1f);
         g_Camera = &camera;
 
-        // Setup UI
         auto offscreen = loader->gfx->CreateOffscreenFramebuffer(1024, 768);
         ServiceLocator::instance().registerService("UIRender", std::make_shared<UIRender>());
         auto uiRender = ServiceLocator::instance().get<UIRender>("UIRender");
@@ -279,29 +353,34 @@ int main()
         Mantrax::Timer gameTimer;
         bool running = true;
 
-        std::cout << "\n=== ECS PBR MODEL VIEWER ===\n";
+        std::cout << "\n=== OPTIMIZED ECS VIEWER - 300 OBJECTS ===\n";
+        std::cout << "Optimization: Shared shader + textures\n";
         std::cout << "Right Click + WASD - Move camera\n";
+        std::cout << "Shift - Sprint\n";
+        std::cout << "Space/Ctrl - Up/Down\n";
         std::cout << "Mouse Wheel - Zoom\n";
         std::cout << "ESC - Exit\n";
-        std::cout << "===========================\n\n";
+        std::cout << "=========================================\n\n";
 
         try
         {
             LuaScript script("script.lua");
-
-            // Variable global que Lua podrá leer
             script.setGlobal("x", 10);
-
             int resultado = script.callIntFunction("doblar", 5);
-            std::cout << "Resultado desde Lua: " << resultado << "\n";
+            std::cout << "Lua result: " << resultado << "\n";
         }
         catch (const std::exception &e)
         {
-            std::cerr << "Excepción: " << e.what() << "\n";
-            return 1;
+            std::cerr << "Lua error: " << e.what() << "\n";
         }
 
         LuaEditor luae;
+
+        float frameTimeAccumulator = 0.0f;
+        int frameCount = 0;
+        float avgFrameTime = 0.0f;
+        int minFPS = 9999;
+        int maxFPS = 0;
 
         // ==================== GAME LOOP ====================
         while (running)
@@ -316,31 +395,37 @@ int main()
             float delta = gameTimer.GetDeltaTime();
             int fps = gameTimer.GetFPS();
 
+            frameTimeAccumulator += delta;
+            frameCount++;
+            if (frameCount >= 60)
+            {
+                avgFrameTime = frameTimeAccumulator / frameCount;
+                frameTimeAccumulator = 0.0f;
+                frameCount = 0;
+            }
+            minFPS = std::min(minFPS, fps);
+            maxFPS = std::max(maxFPS, fps);
+
             if (g_InputSystem->IsKeyPressed(Mantrax::KeyCode::Escape))
             {
                 running = false;
                 break;
             }
 
-            // ✅ ACTUALIZAR SISTEMAS DEL ECS
             UpdateRotationSystem(registry, delta);
             UpdatePhysicsSystem(registry, delta);
             SyncRenderSystem(registry);
 
-            // Procesar input de cámara
             ProcessCameraInput(camera, *g_InputSystem, delta);
             g_InputSystem->Update();
 
-            // ✅ Orden correcto en el game loop
             if (renderView->CheckResize())
             {
-                // 1. Resize del framebuffer
                 loader->gfx->ResizeOffscreenFramebuffer(
                     offscreen,
                     static_cast<uint32_t>(renderView->width),
                     static_cast<uint32_t>(renderView->height));
 
-                // 2. Actualizar descriptor de ImGui
                 offscreen->renderID = ImGui_ImplVulkan_AddTexture(
                     offscreen->sampler,
                     offscreen->colorImageView,
@@ -348,20 +433,16 @@ int main()
 
                 renderView->renderID = offscreen->renderID;
 
-                // 3. ✅ ACTUALIZAR ASPECT RATIO INMEDIATAMENTE
                 camera.SetAspectRatio(
                     static_cast<float>(renderView->width) /
                     static_cast<float>(renderView->height));
 
-                // 4. Reset flag
                 renderView->ResetResizeFlag();
             }
 
-            // Actualizar y renderizar escena
             sceneRenderer->UpdateUBOs(&camera);
             sceneRenderer->RenderScene(offscreen);
 
-            // Window resize handling
             if (loader->window->WasFramebufferResized())
             {
                 uint32_t w, h;
@@ -370,20 +451,39 @@ int main()
                 loader->window->ResetFramebufferResizedFlag();
             }
 
-            // ImGui UI
             imgui.BeginFrame();
 
             luae.Render();
 
-            ImGui::Begin("ECS Scene Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-            ImGui::Text("FPS: %d | Delta: %.4f ms", fps, delta * 1000.0f);
+            ImGui::Begin("ECS Scene - OPTIMIZED", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "PERFORMANCE");
             ImGui::Separator();
+            ImGui::Text("FPS: %d", fps);
+            ImGui::Text("Frame Time: %.2f ms", delta * 1000.0f);
+            ImGui::Text("Avg Frame Time: %.2f ms", avgFrameTime * 1000.0f);
+            ImGui::Text("Min/Max FPS: %d / %d", minFPS, maxFPS);
 
-            if (ImGui::CollapsingHeader("ECS Statistics", ImGuiTreeNodeFlags_DefaultOpen))
+            float frameTimeBudget = 16.67f;
+            float frameTimePercentage = (delta * 1000.0f) / frameTimeBudget;
+            ImGui::ProgressBar(frameTimePercentage, ImVec2(0.0f, 0.0f), "");
+            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+            ImGui::Text("Frame Budget (16.67ms)");
+
+            ImGui::Spacing();
+
+            if (ImGui::CollapsingHeader("Optimization Stats", ImGuiTreeNodeFlags_DefaultOpen))
             {
-                ImGui::Text("Total Objects: %zu", renderObjects.size());
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "MEMORY OPTIMIZATION");
+                ImGui::Text("Total Objects: %d", OBJECT_COUNT);
+                ImGui::Text("Shaders: 1 (SHARED)");
+                ImGui::Text("Texture Sets: 1 (SHARED)");
+                ImGui::Text("  - 5 PBR textures shared by all objects");
+                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f),
+                                   "Memory saved: ~%d texture copies!", (OBJECT_COUNT - 1) * 5);
+                ImGui::Separator();
+                ImGui::Text("Render Objects: %zu", renderObjects.size());
 
-                // Contar entidades con cada componente
                 int transformCount = 0;
                 int rotatorCount = 0;
                 int velocityCount = 0;
@@ -399,35 +499,43 @@ int main()
 
                 ImGui::Text("Entities with Transform: %d", transformCount);
                 ImGui::Text("Entities with Rotator: %d", rotatorCount);
-                ImGui::Text("Entities with Velocity: %d", velocityCount);
+                ImGui::Text("Entities with Velocity: %d (%.1f%%)",
+                            velocityCount, (velocityCount * 100.0f) / OBJECT_COUNT);
             }
 
             if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 glm::vec3 pos = camera.GetPosition();
-                ImGui::Text("Position: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+                ImGui::Text("Position: (%.1f, %.1f, %.1f)", pos.x, pos.y, pos.z);
+                ImGui::Text("Yaw: %.1f | Pitch: %.1f", camera.GetYaw(), camera.GetPitch());
 
                 float speed = camera.GetMovementSpeed();
-                if (ImGui::SliderFloat("Camera Speed", &speed, 1.0f, 20.0f))
+                if (ImGui::SliderFloat("Camera Speed", &speed, 1.0f, 50.0f))
                 {
                     camera.SetMovementSpeed(speed);
                 }
 
+                float fov = camera.GetFOV();
+                if (ImGui::SliderFloat("FOV", &fov, 30.0f, 120.0f))
+                {
+                    camera.SetFOV(fov);
+                }
+
                 if (ImGui::Button("Reset Camera", ImVec2(200, 0)))
                 {
-                    camera = Mantrax::FPSCamera(glm::vec3(0.0f, 5.0f, 20.0f), 60.0f, 0.1f, 1000.0f);
+                    camera = Mantrax::FPSCamera(glm::vec3(0.0f, 30.0f, 80.0f), 60.0f, 0.1f, 1000.0f);
                     camera.SetAspectRatio(static_cast<float>(renderView->width) / static_cast<float>(renderView->height));
-                    camera.SetMovementSpeed(5.0f);
+                    camera.SetMovementSpeed(15.0f);
                     camera.SetMouseSensitivity(0.1f);
                 }
             }
 
-            if (ImGui::CollapsingHeader("Performance"))
+            if (ImGui::CollapsingHeader("Input"))
             {
-                ImGui::Text("Frame Time: %.2f ms", delta * 1000.0f);
-                ImGui::Text("FPS: %d", fps);
                 ImGui::Text("Right Mouse: %s",
                             g_InputSystem->IsMouseButtonDown(Mantrax::MouseButton::Right) ? "DOWN" : "UP");
+                ImGui::Text("Sprint (Shift): %s",
+                            g_InputSystem->IsKeyDown(Mantrax::KeyCode::Shift) ? "ACTIVE" : "INACTIVE");
             }
 
             ImGui::End();
@@ -440,14 +548,20 @@ int main()
         }
         // ==================== FIN GAME LOOP ====================
 
-        // Cleanup
+        std::cout << "\n📊 Final Statistics:\n";
+        std::cout << "  Total Objects Rendered: " << renderObjects.size() << "\n";
+        std::cout << "  Shaders Used: 1 (SHARED)\n";
+        std::cout << "  Texture Sets: 1 (5 PBR textures SHARED)\n";
+        std::cout << "  Min FPS: " << minFPS << "\n";
+        std::cout << "  Max FPS: " << maxFPS << "\n";
+
         g_SceneView = nullptr;
         g_Camera = nullptr;
         g_InputSystem = nullptr;
 
         delete renderView;
 
-        std::cout << "\nShutting down cleanly...\n";
+        std::cout << "\n✅ Shutting down cleanly...\n";
     }
     catch (const std::exception &e)
     {

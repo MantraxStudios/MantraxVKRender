@@ -45,6 +45,10 @@ public:
     void DestroyModel(const std::string &name);
     void DestroyModel(RenderableObject *obj);
 
+    RenderableObject *CreateModelOnly(
+        const std::string &modelPath,
+        const std::string &name);
+
     // Obtener modelo
     RenderableObject *GetModel(const std::string &name);
 

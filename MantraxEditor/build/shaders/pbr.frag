@@ -40,23 +40,23 @@ layout(push_constant) uniform MaterialProperties {
 // Luz direccional principal (simula sol/luz de estudio)
 const vec3 mainLightDir = normalize(vec3(-0.3, -0.7, -0.5));
 const vec3 mainLightColor = vec3(1.0, 0.98, 0.95);
-const float mainLightIntensity = 3.5;
+const float mainLightIntensity = 5.0;
 
 // Luz de relleno suave (simula rebote de luz)
 const vec3 fillLightDir = normalize(vec3(0.5, 0.3, 0.8));
 const vec3 fillLightColor = vec3(0.6, 0.65, 0.7);
-const float fillLightIntensity = 1.2;
+const float fillLightIntensity = 2.0;
 
 // Luz trasera/rim (para definir siluetas)
 const vec3 rimLightDir = normalize(vec3(0.0, 0.2, 1.0));
 const vec3 rimLightColor = vec3(0.9, 0.95, 1.0);
-const float rimLightIntensity = 1.5;
+const float rimLightIntensity = 2.0;
 
 // Iluminación ambiental (IBL simulado)
-const vec3 ambientColorTop = vec3(0.15, 0.18, 0.22);      // Cielo
-const vec3 ambientColorBottom = vec3(0.08, 0.08, 0.09);   // Suelo
-const vec3 ambientColorHorizon = vec3(0.12, 0.14, 0.16);  // Horizonte
-const float ambientIntensity = 0.4;
+const vec3 ambientColorTop = vec3(0.25, 0.28, 0.32);
+const vec3 ambientColorBottom = vec3(0.12, 0.12, 0.14);
+const vec3 ambientColorHorizon = vec3(0.18, 0.20, 0.22);
+const float ambientIntensity = 0.8;
 
 const float PI = 3.14159265359;
 const float EPSILON = 0.0001;
@@ -142,15 +142,12 @@ vec3 CalculateRealisticAmbient(vec3 N, vec3 V, vec3 albedo, vec3 F0, float rough
         upFactor
     );
     
-    // Los metales no tienen componente difusa
+    // Los metales NO tienen componente difusa, solo reflejan
     ambientDiffuse *= (1.0 - metallic);
     
     // Componente especular ambiental (simulación de IBL)
     vec3 R = reflect(-V, N);
     float NdotV = max(dot(N, V), 0.0);
-    
-    // Simular diferentes LODs del environment map basado en roughness
-    float lod = roughness * 5.0;
     
     // Color del environment basado en la dirección de reflexión
     float reflUpness = R.y * 0.5 + 0.5;
@@ -162,8 +159,13 @@ vec3 CalculateRealisticAmbient(vec3 N, vec3 V, vec3 albedo, vec3 F0, float rough
     
     // Los highlights se vuelven más difusos con mayor roughness
     float sharpness = mix(8.0, 2.0, roughness);
-    envColor += vec3(0.3, 0.32, 0.35) * pow(highlight1, sharpness);
-    envColor += vec3(0.2, 0.22, 0.25) * pow(highlight2, sharpness);
+    envColor += vec3(0.5, 0.52, 0.55) * pow(highlight1, sharpness);
+    envColor += vec3(0.3, 0.32, 0.35) * pow(highlight2, sharpness);
+    
+    // IMPORTANTE: Para metales, aumentar la intensidad del environment
+    // Los metales reflejan mucho más luz que los dieléctricos
+    float metalBoost = mix(1.0, 2.0, metallic);
+    envColor *= metalBoost;
     
     // Fresnel para el specular ambiental
     vec3 F = fresnelSchlickRoughness(NdotV, F0, roughness);
@@ -229,15 +231,23 @@ void main() {
         N = -N;
     }
     
-    // ============ SAMPLE PBR TEXTURES ============
+    // ============ SAMPLE PBR TEXTURES - CORREGIDO ============
     
-    // Albedo con gamma correction
+    // Albedo: PRIMERO lee la textura, LUEGO multiplica por baseColorFactor
     vec3 albedo;
     if (material.useAlbedoMap == 1) {
+        // Leer textura con gamma correction
         vec4 albedoSample = texture(albedoMap, fragTexCoord);
         albedo = pow(albedoSample.rgb, vec3(2.2));
+        
+        // SOLO multiplicar por baseColorFactor si no es blanco (1,1,1)
+        // Esto permite tintear la textura si es necesario
+        if (material.baseColorFactor.rgb != vec3(1.0)) {
+            albedo *= material.baseColorFactor.rgb;
+        }
     } else {
-        albedo = material.baseColorFactor.rgb;
+        // Si no hay textura, usar baseColorFactor directamente
+        albedo = pow(material.baseColorFactor.rgb, vec3(2.2));
     }
     
     // Normal mapping
@@ -247,18 +257,38 @@ void main() {
     }
     
     // Metallic
+    // CORREGIDO: Los mapas metálicos pueden estar en diferentes canales
+    // Común: R (glTF), B (algunos workflows), o escala de grises
     float metallic;
     if (material.useMetallicMap == 1) {
-        metallic = texture(metallicMap, fragTexCoord).b * material.metallicFactor;
+        vec4 metallicSample = texture(metallicMap, fragTexCoord);
+        // Intentar detectar el canal correcto:
+        // Si es escala de grises, todos los canales son iguales
+        // Si es glTF 2.0 estándar, metallic está en canal B (azul)
+        // Si es canal R (rojo), usar ese
+        metallic = metallicSample.r; // La mayoría de texturas usan canal R o grayscale
+        
+        // Si el factor no es 1.0, multiplicar (permite ajustar la intensidad)
+        if (material.metallicFactor != 1.0) {
+            metallic *= material.metallicFactor;
+        }
     } else {
         metallic = material.metallicFactor;
     }
     metallic = clamp(metallic, 0.0, 1.0);
     
     // Roughness
+    // CORREGIDO: Similar al metallic, puede estar en diferentes canales
     float roughness;
     if (material.useRoughnessMap == 1) {
-        roughness = texture(roughnessMap, fragTexCoord).g * material.roughnessFactor;
+        vec4 roughnessSample = texture(roughnessMap, fragTexCoord);
+        // glTF 2.0 estándar: roughness en canal G (verde)
+        // Pero muchas texturas usan R o grayscale
+        roughness = roughnessSample.g; // Estándar glTF usa canal G
+        
+        if (material.roughnessFactor != 1.0) {
+            roughness *= material.roughnessFactor;
+        }
     } else {
         roughness = material.roughnessFactor;
     }
@@ -275,8 +305,14 @@ void main() {
     // ============ PBR LIGHTING ============
     
     // F0 (reflectancia base en incidencia normal)
+    // Para dieléctricos (no metales): F0 ≈ 0.04 (4% de reflexión)
+    // Para metales: F0 = albedo (el color del metal ES su reflectancia)
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo, metallic);
+    
+    // DEBUG: Verificar que metallic está siendo leído correctamente
+    // Descomenta la siguiente línea para visualizar el valor de metallic:
+    // outColor = vec4(vec3(metallic), 1.0); return;
     
     // Acumulador de luz directa
     vec3 Lo = vec3(0.0);
@@ -304,11 +340,22 @@ void main() {
     // Composición final
     vec3 color = ambient + Lo;
     
+    // ============ MODOS DE DEBUG (descomenta UNO a la vez para diagnosticar) ============
+    // outColor = vec4(albedo, 1.0); return;                    // Ver albedo puro
+    // outColor = vec4(vec3(metallic), 1.0); return;            // Ver mapa metálico (debe ser blanco en metales)
+    // outColor = vec4(vec3(roughness), 1.0); return;           // Ver mapa de roughness
+    // outColor = vec4(vec3(ao), 1.0); return;                  // Ver ambient occlusion
+    // outColor = vec4(N * 0.5 + 0.5, 1.0); return;             // Ver normales
+    // outColor = vec4(F0, 1.0); return;                        // Ver F0 (debe ser colorido en metales)
+    // outColor = vec4(ambient, 1.0); return;                   // Ver solo luz ambiental
+    // outColor = vec4(Lo, 1.0); return;                        // Ver solo luz directa
+    // ==================================================================================
+    
     // Tone mapping mejorado (ACES filmic)
     color = color / (color + vec3(1.0));
     
-    // Pequeño ajuste de exposición
-    color *= 1.0;
+    // Ajuste de exposición
+    color *= 1.1;
     
     // Gamma correction
     color = pow(color, vec3(1.0/2.2));

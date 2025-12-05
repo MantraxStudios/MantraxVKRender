@@ -150,9 +150,9 @@ namespace Mantrax
     struct MaterialPushConstants
     {
         float baseColorFactor[4] = {1.0f, 1.0f, 1.0f, 1.0f}; // RGB + unused
-        float metallicFactor = 0.0f;
-        float roughnessFactor = 0.6f;
-        float normalScale = 5.0f;
+        float metallicFactor = 1.0f;
+        float roughnessFactor = 0.3f;
+        float normalScale = 1.0f;
         int32_t useAlbedoMap = 0;
         int32_t useNormalMap = 0;
         int32_t useMetallicMap = 0;
@@ -560,11 +560,6 @@ namespace Mantrax
                 return;
             }
 
-            std::cout << "🔄 Resizing offscreen framebuffer: "
-                      << offscreen->extent.width << "x" << offscreen->extent.height
-                      << " → " << width << "x" << height << std::endl;
-
-            // ✅ CRÍTICO: Esperar a que la GPU termine COMPLETAMENTE
             vkDeviceWaitIdle(m_Device);
 
             // Limpiar recursos anteriores (orden importante)
