@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "MantraxCSLib/1.0.0": {
+        "runtime": {
+          "MantraxCSLib.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "MantraxCSLib/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

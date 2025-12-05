@@ -1,0 +1,12 @@
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\bin\Debug\net9.0\MantraxCSLib.deps.json
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\bin\Debug\net9.0\MantraxCSLib.dll
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\bin\Debug\net9.0\MantraxCSLib.pdb
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\obj\Debug\net9.0\MantraxCSLib.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\obj\Debug\net9.0\MantraxCSLib.AssemblyInfoInputs.cache
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\obj\Debug\net9.0\MantraxCSLib.AssemblyInfo.cs
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\obj\Debug\net9.0\MantraxCSLib.csproj.CoreCompileInputs.cache
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\obj\Debug\net9.0\MantraxCSLib.sourcelink.json
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\obj\Debug\net9.0\MantraxCSLib.dll
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\obj\Debug\net9.0\refint\MantraxCSLib.dll
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\obj\Debug\net9.0\MantraxCSLib.pdb
+C:\Users\tupap\Desktop\MantraxVKRender\MantraxCSLib\obj\Debug\net9.0\ref\MantraxCSLib.dll
