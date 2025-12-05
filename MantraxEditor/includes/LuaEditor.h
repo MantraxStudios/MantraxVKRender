@@ -38,13 +38,19 @@ private:
         "print", "pairs", "ipairs", "type", "tonumber", "tostring", "require",
         "assert", "error", "pcall", "xpcall", "next", "select", "getmetatable",
         "setmetatable", "rawget", "rawset", "rawequal", "collectgarbage",
-        "math.abs", "math.acos", "math.asin", "math.atan", "math.ceil", "math.cos",
-        "math.deg", "math.exp", "math.floor", "math.log", "math.max", "math.min",
-        "math.rad", "math.random", "math.sin", "math.sqrt", "math.tan",
-        "string.byte", "string.char", "string.find", "string.format", "string.gsub",
-        "string.len", "string.lower", "string.match", "string.rep", "string.reverse",
-        "string.sub", "string.upper", "table.concat", "table.insert", "table.remove",
-        "table.sort"};
+        "math", "string", "table", "abs", "acos", "asin", "atan", "ceil", "cos",
+        "deg", "exp", "floor", "log", "max", "min", "rad", "random", "sin",
+        "sqrt", "tan", "byte", "char", "find", "format", "gsub", "len", "lower",
+        "match", "rep", "reverse", "sub", "upper", "concat", "insert", "remove", "sort"};
+
+    // Colores para syntax highlighting
+    ImVec4 colorKeyword = ImVec4(0.86f, 0.47f, 0.89f, 1.0f);  // Púrpura para keywords
+    ImVec4 colorBuiltin = ImVec4(0.33f, 0.78f, 0.98f, 1.0f);  // Azul para builtins
+    ImVec4 colorString = ImVec4(0.80f, 0.73f, 0.46f, 1.0f);   // Amarillo para strings
+    ImVec4 colorNumber = ImVec4(0.68f, 0.85f, 0.57f, 1.0f);   // Verde claro para números
+    ImVec4 colorComment = ImVec4(0.45f, 0.53f, 0.45f, 1.0f);  // Gris verde para comentarios
+    ImVec4 colorOperator = ImVec4(0.86f, 0.86f, 0.86f, 1.0f); // Blanco para operadores
+    ImVec4 colorDefault = ImVec4(0.86f, 0.86f, 0.86f, 1.0f);  // Blanco para texto normal
 
     void UpdateLineNumbers()
     {

@@ -261,7 +261,7 @@ int main()
 
         // Configurar cámara
         Mantrax::FPSCamera camera(glm::vec3(0.0f, 5.0f, 20.0f), 60.0f, 0.1f, 1000.0f);
-        camera.SetAspectRatio(1920.0f / 1080.0f);
+        camera.SetAspectRatio(1540.0f / 948.0f);
         camera.SetMovementSpeed(5.0f);
         camera.SetMouseSensitivity(0.1f);
         g_Camera = &camera;
@@ -331,21 +331,29 @@ int main()
             ProcessCameraInput(camera, *g_InputSystem, delta);
             g_InputSystem->Update();
 
-            // Resize handling
+            // ✅ Orden correcto en el game loop
             if (renderView->CheckResize())
             {
+                // 1. Resize del framebuffer
                 loader->gfx->ResizeOffscreenFramebuffer(
                     offscreen,
                     static_cast<uint32_t>(renderView->width),
                     static_cast<uint32_t>(renderView->height));
 
+                // 2. Actualizar descriptor de ImGui
                 offscreen->renderID = ImGui_ImplVulkan_AddTexture(
                     offscreen->sampler,
                     offscreen->colorImageView,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
                 renderView->renderID = offscreen->renderID;
-                camera.SetAspectRatio(static_cast<float>(renderView->width) / static_cast<float>(renderView->height));
+
+                // 3. ✅ ACTUALIZAR ASPECT RATIO INMEDIATAMENTE
+                camera.SetAspectRatio(
+                    static_cast<float>(renderView->width) /
+                    static_cast<float>(renderView->height));
+
+                // 4. Reset flag
                 renderView->ResetResizeFlag();
             }
 

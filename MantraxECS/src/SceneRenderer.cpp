@@ -53,6 +53,9 @@ void SceneRenderer::UpdateUBOs(Mantrax::FPSCamera *camera)
 {
     glm::vec3 camPos = camera->GetPosition();
 
+    glm::mat4 view = camera->GetViewMatrix();
+    glm::mat4 proj = camera->GetProjectionMatrix();
+
     for (auto *obj : m_sceneObjects)
     {
         glm::mat4 model = glm::translate(glm::mat4(1.0f), obj->position);
@@ -60,8 +63,8 @@ void SceneRenderer::UpdateUBOs(Mantrax::FPSCamera *camera)
         model = glm::scale(model, obj->scale);
 
         CopyMat4(obj->ubo.model, model);
-        CopyMat4(obj->ubo.view, camera->GetViewMatrix());
-        CopyMat4(obj->ubo.projection, camera->GetProjectionMatrix());
+        CopyMat4(obj->ubo.view, view);
+        CopyMat4(obj->ubo.projection, proj);
 
         obj->ubo.cameraPosition[0] = camPos.x;
         obj->ubo.cameraPosition[1] = camPos.y;

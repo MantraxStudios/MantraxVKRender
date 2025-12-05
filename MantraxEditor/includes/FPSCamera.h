@@ -4,7 +4,7 @@
 
 namespace Mantrax
 {
-    // Enum para direcciones de movimiento (DEBE estar ANTES de la clase)
+    // Enum para direcciones de movimiento
     enum CameraMovement
     {
         FORWARD,
@@ -26,7 +26,7 @@ namespace Mantrax
               m_FOV(fov),
               m_NearPlane(nearPlane),
               m_FarPlane(farPlane),
-              m_Yaw(-90.0f), // Mirando hacia +Z inicialmente
+              m_Yaw(-90.0f),
               m_Pitch(0.0f),
               m_AspectRatio(16.0f / 9.0f),
               m_MovementSpeed(15.0f),
@@ -46,7 +46,11 @@ namespace Mantrax
         glm::mat4 GetProjectionMatrix() const
         {
             glm::mat4 proj = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_NearPlane, m_FarPlane);
-            proj[1][1] *= -1; // Corrección para Vulkan
+
+            // IMPORTANTE: Solo invierte Y si estás usando Vulkan
+            // Para OpenGL, comenta esta línea:
+            proj[1][1] *= -1;
+
             return proj;
         }
 
@@ -111,6 +115,14 @@ namespace Mantrax
                 m_FOV = 120.0f;
         }
 
+        // NUEVO: Actualizar cuando cambie el tamaño de ventana
+        void OnWindowResize(int width, int height)
+        {
+            if (height == 0)
+                height = 1; // Prevenir división por cero
+            m_AspectRatio = static_cast<float>(width) / static_cast<float>(height);
+        }
+
         // Setters
         void SetPosition(const glm::vec3 &position)
         {
@@ -158,17 +170,7 @@ namespace Mantrax
         float GetPitch() const { return m_Pitch; }
         float GetFOV() const { return m_FOV; }
         float GetMovementSpeed() const { return m_MovementSpeed; }
-
-        // Enum para direcciones de movimiento
-        enum CameraMovement
-        {
-            FORWARD,
-            BACKWARD,
-            LEFT,
-            RIGHT,
-            UP,
-            DOWN
-        };
+        float GetAspectRatio() const { return m_AspectRatio; }
 
     private:
         void UpdateVectors()

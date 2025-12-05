@@ -546,39 +546,74 @@ namespace Mantrax
         void ResizeOffscreenFramebuffer(std::shared_ptr<OffscreenFramebuffer> offscreen,
                                         uint32_t width, uint32_t height)
         {
-            if (offscreen->extent.width == width && offscreen->extent.height == height)
+            // ✅ Validación de tamaño mínimo
+            if (width == 0 || height == 0)
+            {
+                std::cerr << "❌ Invalid framebuffer size: " << width << "x" << height << std::endl;
                 return;
+            }
 
+            // ✅ Si el tamaño no cambió, no hacer nada
+            if (offscreen->extent.width == width && offscreen->extent.height == height)
+            {
+                std::cout << "⏭️ Framebuffer size unchanged, skipping resize" << std::endl;
+                return;
+            }
+
+            std::cout << "🔄 Resizing offscreen framebuffer: "
+                      << offscreen->extent.width << "x" << offscreen->extent.height
+                      << " → " << width << "x" << height << std::endl;
+
+            // ✅ CRÍTICO: Esperar a que la GPU termine COMPLETAMENTE
             vkDeviceWaitIdle(m_Device);
 
-            // Limpiar recursos anteriores
+            // Limpiar recursos anteriores (orden importante)
             if (offscreen->framebuffer != VK_NULL_HANDLE)
+            {
                 vkDestroyFramebuffer(m_Device, offscreen->framebuffer, nullptr);
+                offscreen->framebuffer = VK_NULL_HANDLE;
+            }
+
             if (offscreen->colorImageView != VK_NULL_HANDLE)
+            {
                 vkDestroyImageView(m_Device, offscreen->colorImageView, nullptr);
-            if (offscreen->colorImage != VK_NULL_HANDLE)
-                vkDestroyImage(m_Device, offscreen->colorImage, nullptr);
-            if (offscreen->colorMemory != VK_NULL_HANDLE)
-                vkFreeMemory(m_Device, offscreen->colorMemory, nullptr);
+                offscreen->colorImageView = VK_NULL_HANDLE;
+            }
+
             if (offscreen->depthImageView != VK_NULL_HANDLE)
+            {
                 vkDestroyImageView(m_Device, offscreen->depthImageView, nullptr);
+                offscreen->depthImageView = VK_NULL_HANDLE;
+            }
+
+            if (offscreen->colorImage != VK_NULL_HANDLE)
+            {
+                vkDestroyImage(m_Device, offscreen->colorImage, nullptr);
+                offscreen->colorImage = VK_NULL_HANDLE;
+            }
+
             if (offscreen->depthImage != VK_NULL_HANDLE)
+            {
                 vkDestroyImage(m_Device, offscreen->depthImage, nullptr);
+                offscreen->depthImage = VK_NULL_HANDLE;
+            }
+
+            if (offscreen->colorMemory != VK_NULL_HANDLE)
+            {
+                vkFreeMemory(m_Device, offscreen->colorMemory, nullptr);
+                offscreen->colorMemory = VK_NULL_HANDLE;
+            }
+
             if (offscreen->depthMemory != VK_NULL_HANDLE)
+            {
                 vkFreeMemory(m_Device, offscreen->depthMemory, nullptr);
+                offscreen->depthMemory = VK_NULL_HANDLE;
+            }
 
-            // Reinicializar handles
-            offscreen->framebuffer = VK_NULL_HANDLE;
-            offscreen->colorImageView = VK_NULL_HANDLE;
-            offscreen->colorImage = VK_NULL_HANDLE;
-            offscreen->colorMemory = VK_NULL_HANDLE;
-            offscreen->depthImageView = VK_NULL_HANDLE;
-            offscreen->depthImage = VK_NULL_HANDLE;
-            offscreen->depthMemory = VK_NULL_HANDLE;
-
-            // Recrear con nuevo tamaño
+            // Actualizar dimensiones
             offscreen->extent = {width, height};
 
+            // Recrear color image
             CreateImage(width, height, offscreen->colorFormat,
                         VK_IMAGE_TILING_OPTIMAL,
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -589,6 +624,7 @@ namespace Mantrax
                                                         offscreen->colorFormat,
                                                         VK_IMAGE_ASPECT_COLOR_BIT);
 
+            // Recrear depth image
             CreateImage(width, height, offscreen->depthFormat,
                         VK_IMAGE_TILING_OPTIMAL,
                         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -599,6 +635,7 @@ namespace Mantrax
                                                         offscreen->depthFormat,
                                                         VK_IMAGE_ASPECT_DEPTH_BIT);
 
+            // Recrear framebuffer
             std::array<VkImageView, 2> attachments = {
                 offscreen->colorImageView,
                 offscreen->depthImageView};
@@ -615,23 +652,24 @@ namespace Mantrax
             if (vkCreateFramebuffer(m_Device, &fbInfo, nullptr, &offscreen->framebuffer) != VK_SUCCESS)
                 throw std::runtime_error("Error recreando offscreen framebuffer");
 
-            // Transicionar la nueva imagen
+            // ✅ CRÍTICO: Transición correcta con command buffer
             VkCommandBuffer cmd = BeginSingleTimeCommands();
 
-            VkImageMemoryBarrier barrier{};
-            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.image = offscreen->colorImage;
-            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier.subresourceRange.baseMipLevel = 0;
-            barrier.subresourceRange.levelCount = 1;
-            barrier.subresourceRange.baseArrayLayer = 0;
-            barrier.subresourceRange.layerCount = 1;
-            barrier.srcAccessMask = 0;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            // Transición de color image: UNDEFINED → SHADER_READ_ONLY
+            VkImageMemoryBarrier colorBarrier{};
+            colorBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            colorBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            colorBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            colorBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            colorBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            colorBarrier.image = offscreen->colorImage;
+            colorBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            colorBarrier.subresourceRange.baseMipLevel = 0;
+            colorBarrier.subresourceRange.levelCount = 1;
+            colorBarrier.subresourceRange.baseArrayLayer = 0;
+            colorBarrier.subresourceRange.layerCount = 1;
+            colorBarrier.srcAccessMask = 0;
+            colorBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
             vkCmdPipelineBarrier(
                 cmd,
@@ -640,11 +678,35 @@ namespace Mantrax
                 0,
                 0, nullptr,
                 0, nullptr,
-                1, &barrier);
+                1, &colorBarrier);
+
+            // ✅ Transición de depth image: UNDEFINED → DEPTH_STENCIL_ATTACHMENT
+            VkImageMemoryBarrier depthBarrier{};
+            depthBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            depthBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            depthBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            depthBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            depthBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            depthBarrier.image = offscreen->depthImage;
+            depthBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            depthBarrier.subresourceRange.baseMipLevel = 0;
+            depthBarrier.subresourceRange.levelCount = 1;
+            depthBarrier.subresourceRange.baseArrayLayer = 0;
+            depthBarrier.subresourceRange.layerCount = 1;
+            depthBarrier.srcAccessMask = 0;
+            depthBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+            vkCmdPipelineBarrier(
+                cmd,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &depthBarrier);
 
             EndSingleTimeCommands(cmd);
-
-            std::cout << "Offscreen framebuffer redimensionado: " << width << "x" << height << "\n";
         }
 
         void RenderToOffscreenFramebuffer(std::shared_ptr<OffscreenFramebuffer> offscreen,
@@ -652,7 +714,7 @@ namespace Mantrax
         {
             VkCommandBuffer cmd = BeginSingleTimeCommands();
 
-            // Transición: SHADER_READ_ONLY -> COLOR_ATTACHMENT
+            // Transición: SHADER_READ_ONLY → COLOR_ATTACHMENT
             VkImageMemoryBarrier barrier1{};
             barrier1.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             barrier1.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -693,7 +755,7 @@ namespace Mantrax
 
             vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-            // Viewport y scissor
+            // ✅ ESTABLECER VIEWPORT DINÁMICO CON LAS DIMENSIONES DEL OFFSCREEN FRAMEBUFFER
             VkViewport viewport{};
             viewport.x = 0.0f;
             viewport.y = 0.0f;
@@ -703,12 +765,13 @@ namespace Mantrax
             viewport.maxDepth = 1.0f;
             vkCmdSetViewport(cmd, 0, 1, &viewport);
 
+            // ✅ ESTABLECER SCISSOR DINÁMICO
             VkRect2D scissor{};
             scissor.offset = {0, 0};
             scissor.extent = offscreen->extent;
             vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            // ✅ Track último pipeline
+            // Track último pipeline
             VkPipeline lastPipeline = VK_NULL_HANDLE;
 
             // Renderizar objetos
@@ -723,7 +786,7 @@ namespace Mantrax
                 if (!obj.material->shader->pipeline)
                     continue;
 
-                // ✅ Bind pipeline solo si cambió
+                // Bind pipeline solo si cambió
                 if (obj.material->shader->pipeline != lastPipeline)
                 {
                     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -731,7 +794,7 @@ namespace Mantrax
                     lastPipeline = obj.material->shader->pipeline;
                 }
 
-                // ✅ Push constants SIEMPRE (cada objeto tiene los suyos)
+                // Push constants (cada objeto tiene los suyos)
                 vkCmdPushConstants(
                     cmd,
                     obj.material->shader->pipelineLayout,
@@ -755,7 +818,7 @@ namespace Mantrax
 
             vkCmdEndRenderPass(cmd);
 
-            // Transición: COLOR_ATTACHMENT -> SHADER_READ_ONLY
+            // Transición: COLOR_ATTACHMENT → SHADER_READ_ONLY
             VkImageMemoryBarrier barrier2{};
             barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             barrier2.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -2328,15 +2391,16 @@ namespace Mantrax
             ia.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
             ia.topology = shader->config.topology;
 
+            // ✅ VIEWPORT Y SCISSOR DINÁMICOS
             VkViewport vp{};
             vp.x = 0.0f;
             vp.y = 0.0f;
-            vp.width = (float)m_SwapchainExtent.width;
-            vp.height = (float)m_SwapchainExtent.height;
+            vp.width = 1.0f;  // Dummy - se establecerá dinámicamente
+            vp.height = 1.0f; // Dummy - se establecerá dinámicamente
             vp.minDepth = 0.0f;
             vp.maxDepth = 1.0f;
 
-            VkRect2D sc{{0, 0}, m_SwapchainExtent};
+            VkRect2D sc{{0, 0}, {1, 1}}; // Dummy - se establecerá dinámicamente
 
             VkPipelineViewportStateCreateInfo vpst{};
             vpst.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -2376,6 +2440,7 @@ namespace Mantrax
             cb.attachmentCount = 1;
             cb.pAttachments = &cba;
 
+            // Descriptor Set Layout con todas las texturas PBR
             std::array<VkDescriptorSetLayoutBinding, 6> bindings{};
 
             // Binding 0: UBO (matrices)
@@ -2422,7 +2487,7 @@ namespace Mantrax
             if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &shader->descriptorSetLayout) != VK_SUCCESS)
                 throw std::runtime_error("Error creando descriptor set layout");
 
-            // ============ PIPELINE LAYOUT CON PUSH CONSTANTS ============
+            // Pipeline Layout con Push Constants
             VkPushConstantRange pushConstantRange{};
             pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
             pushConstantRange.offset = 0;
@@ -2444,6 +2509,17 @@ namespace Mantrax
             ds.depthWriteEnable = shader->config.depthWriteEnable ? VK_TRUE : VK_FALSE;
             ds.depthCompareOp = shader->config.depthCompareOp;
 
+            // ✅ DYNAMIC STATE PARA VIEWPORT Y SCISSOR
+            std::vector<VkDynamicState> dynamicStates = {
+                VK_DYNAMIC_STATE_VIEWPORT,
+                VK_DYNAMIC_STATE_SCISSOR};
+
+            VkPipelineDynamicStateCreateInfo dynamicState{};
+            dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+            dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+            dynamicState.pDynamicStates = dynamicStates.data();
+
+            // Crear pipeline
             VkGraphicsPipelineCreateInfo pi{};
             pi.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
             pi.stageCount = 2;
@@ -2455,6 +2531,7 @@ namespace Mantrax
             pi.pMultisampleState = &ms;
             pi.pColorBlendState = &cb;
             pi.pDepthStencilState = &ds;
+            pi.pDynamicState = &dynamicState; // ✅ AÑADIR DYNAMIC STATE
             pi.layout = shader->pipelineLayout;
             pi.renderPass = (renderPass != VK_NULL_HANDLE) ? renderPass : m_RenderPass;
             pi.subpass = 0;
@@ -2465,6 +2542,7 @@ namespace Mantrax
             vkDestroyShaderModule(m_Device, vert, nullptr);
             vkDestroyShaderModule(m_Device, frag, nullptr);
 
+            // Agregar a la lista de shaders
             bool exists = false;
             for (const auto &s : m_AllShaders)
             {
