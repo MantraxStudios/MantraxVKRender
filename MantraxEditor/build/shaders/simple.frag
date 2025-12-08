@@ -18,14 +18,18 @@ void main() {
     // Muestrear la textura
     vec4 texColor = texture(albedoMap, fragTexCoord);
     
-    // Aplicar corrección gamma 2.2 (convertir de sRGB a linear)
+    // OPCIONAL: Descartar fragmentos casi completamente transparentes
+    // if(texColor.a < 0.01) discard;
+    
+    // Aplicar corrección gamma 2.2 solo al RGB
     vec3 linearColor = pow(texColor.rgb, vec3(2.2));
     
     // Multiplicar por el color del vértice
     linearColor *= fragColor;
     
-    // Convertir de vuelta a sRGB para display (gamma correction)
+    // Convertir de vuelta a sRGB para display
     vec3 finalColor = pow(linearColor, vec3(1.0 / 2.2));
     
+    // CRÍTICO: Mantener el alpha original de la textura
     outColor = vec4(finalColor, texColor.a);
 }

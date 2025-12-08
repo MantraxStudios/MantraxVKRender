@@ -18,8 +18,8 @@
 #include <iostream>
 #include <vector>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "../../MantraxECS/include/stb_image.h"
+// Removed: #define STB_IMAGE_IMPLEMENTATION
+// Removed: #include "../../MantraxECS/include/stb_image.h"
 
 struct Transform
 {
@@ -179,33 +179,13 @@ int main()
 
         std::cout << "\n🚀 Loading PBR textures...\n";
 
-        int width, height, channels;
-        stbi_set_flip_vertically_on_load(true);
-
-        unsigned char *colorData = stbi_load("textures/DiamondPlate008A_1K-PNG_Color.png",
-                                             &width, &height, &channels, STBI_rgb_alpha);
-        auto colorTexture = loader->gfx->CreateTexture(colorData, width, height);
-        stbi_image_free(colorData);
-
-        unsigned char *normalData = stbi_load("textures/DiamondPlate008A_1K-PNG_NormalGL.png",
-                                              &width, &height, &channels, STBI_rgb_alpha);
-        auto normalTexture = loader->gfx->CreateTexture(normalData, width, height);
-        stbi_image_free(normalData);
-
-        unsigned char *metallicData = stbi_load("textures/DiamondPlate008A_1K-PNG_Metalness.png",
-                                                &width, &height, &channels, STBI_rgb_alpha);
-        auto metallicTexture = loader->gfx->CreateTexture(metallicData, width, height);
-        stbi_image_free(metallicData);
-
-        unsigned char *roughnessData = stbi_load("textures/DiamondPlate008A_1K-PNG_Roughness.png",
-                                                 &width, &height, &channels, STBI_rgb_alpha);
-        auto roughnessTexture = loader->gfx->CreateTexture(roughnessData, width, height);
-        stbi_image_free(roughnessData);
-
-        unsigned char *aoData = stbi_load("textures/DiamondPlate008A_1K-PNG_AmbientOcclusion.png",
-                                          &width, &height, &channels, STBI_rgb_alpha);
-        auto aoTexture = loader->gfx->CreateTexture(aoData, width, height);
-        stbi_image_free(aoData);
+        // Usar TextureLoader en lugar de stbi_load directamente
+        auto colorTextureData = Mantrax::TextureLoader::LoadFromFile(
+            "Ground A2_E.png");
+        auto colorTexture = loader->gfx->CreateTexture(
+            colorTextureData->pixels,
+            colorTextureData->width,
+            colorTextureData->height);
 
         std::cout << "✅ PBR textures loaded successfully!\n";
         std::cout << "\n🚀 Creating initial object...\n";
@@ -225,10 +205,10 @@ int main()
         loader->gfx->SetMaterialPBRTextures(
             cubeMaterial,
             colorTexture,
-            normalTexture,
-            metallicTexture,
-            roughnessTexture,
-            aoTexture);
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr);
 
         cubeObj->material = cubeMaterial;
         cubeObj->renderObj.material = cubeMaterial;
@@ -260,10 +240,14 @@ int main()
 
         Mantrax::SkyBox skybox(loader->gfx.get(), 1.0f, 32, 16);
 
-        stbi_set_flip_vertically_on_load(true);
-        unsigned char *skyboxData = stbi_load("textures/skybox.jpg", &width, &height, &channels, STBI_rgb_alpha);
-        auto skyboxTexture = loader->gfx->CreateTexture(skyboxData, width, height);
-        stbi_image_free(skyboxData);
+        // Usar TextureLoader para el skybox
+        auto skyboxTextureData = Mantrax::TextureLoader::LoadFromFile(
+            "textures/skybox.jpg",
+            true);
+        auto skyboxTexture = loader->gfx->CreateTexture(
+            skyboxTextureData->pixels,
+            skyboxTextureData->width,
+            skyboxTextureData->height);
 
         auto skyboxMaterial = loader->gfx->CreateMaterial(loader->skyboxShader);
         skyboxMaterial->SetBaseColor(2.0f, 2.0f, 2.0f);
@@ -424,10 +408,10 @@ int main()
                         loader->gfx->SetMaterialPBRTextures(
                             newMaterial,
                             colorTexture,
-                            normalTexture,
-                            metallicTexture,
-                            roughnessTexture,
-                            aoTexture);
+                            nullptr,
+                            nullptr,
+                            nullptr,
+                            nullptr);
 
                         newObj->material = newMaterial;
                         newObj->renderObj.material = newMaterial;

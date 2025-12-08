@@ -199,6 +199,8 @@ std::shared_ptr<Mantrax::Texture> ModelManager::LoadTexture(
 {
     int width, height, channels;
     stbi_set_flip_vertically_on_load(true);
+
+    // ✅ Cargar con 4 canales forzados (RGBA)
     unsigned char *data = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
 
     if (!data)
@@ -208,9 +210,25 @@ std::shared_ptr<Mantrax::Texture> ModelManager::LoadTexture(
         return nullptr;
     }
 
+    // ✅ DEBUG: Verificar que tenemos datos válidos
+    std::cout << "✓ Loaded " << name << ": " << path << std::endl;
+    std::cout << "  Size: " << width << "x" << height << std::endl;
+    std::cout << "  Original channels: " << channels << " (forced to 4 RGBA)" << std::endl;
+
+    // ✅ DEBUG: Verificar canal alpha
+    bool hasTransparency = false;
+    for (int i = 0; i < width * height; i++)
+    {
+        if (data[i * 4 + 3] < 255) // Revisar canal alpha
+        {
+            hasTransparency = true;
+            break;
+        }
+    }
+    std::cout << "  Has transparency: " << (hasTransparency ? "YES" : "NO") << std::endl;
+
     auto texture = m_gfx->CreateTexture(data, width, height);
     stbi_image_free(data);
 
-    std::cout << "✓ Loaded " << name << ": " << path << " (" << width << "x" << height << ")" << std::endl;
     return texture;
 }

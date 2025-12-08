@@ -18,26 +18,21 @@ void EngineLoader::Start(HINSTANCE hInst, const std::function<LRESULT(HWND, UINT
     // Crear GFX
     gfx = std::make_unique<Mantrax::GFX>(hInst, window->GetHWND(), gfxConfig);
 
-    // --- Normal shader ---
+    // ✅ NUEVO: SHADER PARA OBJETOS TRANSPARENTES
     normalShaderConfig.vertexShaderPath = "shaders/simple.vert.spv";
-    normalShaderConfig.fragmentShaderPath = "shaders/simple.frag.spv";
+    normalShaderConfig.fragmentShaderPath = "shaders/simple.frag.spv"; // Mismo fragment
     normalShaderConfig.vertexBinding = Mantrax::Vertex::GetBindingDescription();
     normalShaderConfig.vertexAttributes = Mantrax::Vertex::GetAttributeDescriptions();
 
-    // Topology y rasterización
     normalShaderConfig.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     normalShaderConfig.polygonMode = VK_POLYGON_MODE_FILL;
-    normalShaderConfig.cullMode = VK_CULL_MODE_BACK_BIT; // Culling normal (back faces)
+    normalShaderConfig.cullMode = VK_CULL_MODE_NONE;
     normalShaderConfig.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
-    // ✅ DEPTH CONFIGURATION PARA OBJETOS OPACOS:
-    normalShaderConfig.depthTestEnable = true;              // Leer depth buffer
-    normalShaderConfig.depthWriteEnable = true;             // ✅ CRÍTICO: Escribir depth
-    normalShaderConfig.depthCompareOp = VK_COMPARE_OP_LESS; // Dibujar si depth < actual
-
-    // Blending (normalmente off para objetos opacos)
-    normalShaderConfig.blendEnable = false;
-
+    normalShaderConfig.depthTestEnable = true;
+    normalShaderConfig.depthWriteEnable = false;
+    normalShaderConfig.depthCompareOp = VK_COMPARE_OP_LESS;
+    normalShaderConfig.blendEnable = true;
     normalShader = gfx->CreateShader(normalShaderConfig);
 
     skyboxShaderConfig.vertexShaderPath = "shaders/skybox.vert.spv";

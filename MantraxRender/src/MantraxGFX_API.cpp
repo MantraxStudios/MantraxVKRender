@@ -439,7 +439,7 @@ namespace Mantrax
 
         vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        // ✅ ESTABLECER VIEWPORT DINÁMICO CON LAS DIMENSIONES DEL OFFSCREEN FRAMEBUFFER
+        // ✅ ESTABLECER VIEWPORT Y SCISSOR
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
@@ -449,7 +449,6 @@ namespace Mantrax
         viewport.maxDepth = 1.0f;
         vkCmdSetViewport(cmd, 0, 1, &viewport);
 
-        // ✅ ESTABLECER SCISSOR DINÁMICO
         VkRect2D scissor{};
         scissor.offset = {0, 0};
         scissor.extent = offscreen->extent;
@@ -458,7 +457,7 @@ namespace Mantrax
         // Track último pipeline
         VkPipeline lastPipeline = VK_NULL_HANDLE;
 
-        // Renderizar objetos
+        // Renderizar objetos OPACOS primero
         for (const auto &obj : objects)
         {
             if (!obj.mesh || !obj.material || !obj.material->shader)
@@ -470,7 +469,10 @@ namespace Mantrax
             if (!obj.material->shader->pipeline)
                 continue;
 
-            // Bind pipeline solo si cambió
+            // Saltar transparentes
+            if (obj.material->shader->config.blendEnable)
+                continue;
+
             if (obj.material->shader->pipeline != lastPipeline)
             {
                 vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -478,7 +480,50 @@ namespace Mantrax
                 lastPipeline = obj.material->shader->pipeline;
             }
 
-            // Push constants (cada objeto tiene los suyos)
+            vkCmdPushConstants(
+                cmd,
+                obj.material->shader->pipelineLayout,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                0,
+                sizeof(MaterialPushConstants),
+                &obj.material->pushConstants);
+
+            VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    obj.material->shader->pipelineLayout,
+                                    0, 1, &obj.material->descriptorSet, 0, nullptr);
+
+            vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()),
+                             1, 0, 0, 0);
+        }
+
+        // Renderizar objetos TRANSPARENTES
+        for (const auto &obj : objects)
+        {
+            if (!obj.mesh || !obj.material || !obj.material->shader)
+                continue;
+
+            if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
+                continue;
+
+            if (!obj.material->shader->pipeline)
+                continue;
+
+            // Solo transparentes
+            if (!obj.material->shader->config.blendEnable)
+                continue;
+
+            if (obj.material->shader->pipeline != lastPipeline)
+            {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  obj.material->shader->pipeline);
+                lastPipeline = obj.material->shader->pipeline;
+            }
+
             vkCmdPushConstants(
                 cmd,
                 obj.material->shader->pipelineLayout,
@@ -2046,16 +2091,21 @@ namespace Mantrax
         VkPipelineColorBlendAttachmentState cba{};
         cba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                              VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        cba.blendEnable = shader->config.blendEnable ? VK_TRUE : VK_FALSE;
 
         if (shader->config.blendEnable)
         {
+            cba.blendEnable = VK_TRUE;
+            // Alpha blending correcto
             cba.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
             cba.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
             cba.colorBlendOp = VK_BLEND_OP_ADD;
             cba.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-            cba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+            cba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
             cba.alphaBlendOp = VK_BLEND_OP_ADD;
+        }
+        else
+        {
+            cba.blendEnable = VK_FALSE;
         }
 
         VkPipelineColorBlendStateCreateInfo cb{};
@@ -2128,9 +2178,24 @@ namespace Mantrax
 
         VkPipelineDepthStencilStateCreateInfo ds{};
         ds.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        ds.depthTestEnable = shader->config.depthTestEnable ? VK_TRUE : VK_FALSE;
-        ds.depthWriteEnable = shader->config.depthWriteEnable ? VK_TRUE : VK_FALSE;
-        ds.depthCompareOp = shader->config.depthCompareOp;
+
+        // ✅ CRÍTICO: Para objetos transparentes
+        if (shader->config.blendEnable)
+        {
+            ds.depthTestEnable = VK_TRUE;   // Leer depth buffer
+            ds.depthWriteEnable = VK_FALSE; // NO escribir en depth buffer
+            ds.depthCompareOp = VK_COMPARE_OP_LESS;
+        }
+        else
+        {
+            // Para objetos opacos
+            ds.depthTestEnable = shader->config.depthTestEnable ? VK_TRUE : VK_FALSE;
+            ds.depthWriteEnable = shader->config.depthWriteEnable ? VK_TRUE : VK_FALSE;
+            ds.depthCompareOp = shader->config.depthCompareOp;
+        }
+
+        ds.depthBoundsTestEnable = VK_FALSE;
+        ds.stencilTestEnable = VK_FALSE;
 
         // ✅ DYNAMIC STATE PARA VIEWPORT Y SCISSOR
         std::vector<VkDynamicState> dynamicStates = {
@@ -2306,11 +2371,26 @@ namespace Mantrax
 
         vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+        // ✅ CRÍTICO: Establecer viewport y scissor dinámicos AL INICIO
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(m_SwapchainExtent.width);
+        viewport.height = static_cast<float>(m_SwapchainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = {0, 0};
+        scissor.extent = m_SwapchainExtent;
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+
         // Variable para trackear el último pipeline bindeado
         VkPipeline lastPipeline = VK_NULL_HANDLE;
         VkPipelineLayout lastLayout = VK_NULL_HANDLE;
 
-        // Renderizar objetos
+        // ✅ PASO 1: Renderizar objetos OPACOS primero
         for (const auto &obj : m_RenderObjects)
         {
             if (!obj.mesh || !obj.material || !obj.material->shader)
@@ -2322,8 +2402,11 @@ namespace Mantrax
             if (!obj.material->shader->pipeline)
                 continue;
 
-            // ✅ CRÍTICO: Bind pipeline SOLO si cambió
-            // Esto asegura que cada objeto use su propio shader
+            // Saltar objetos transparentes en este pase
+            if (obj.material->shader->config.blendEnable)
+                continue;
+
+            // Bind pipeline solo si cambió
             if (obj.material->shader->pipeline != lastPipeline)
             {
                 vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -2332,8 +2415,81 @@ namespace Mantrax
                 lastLayout = obj.material->shader->pipelineLayout;
             }
 
-            // ✅ CRÍTICO: Push constants para propiedades del material
-            // Cada objeto debe enviar sus propios push constants
+            // Push constants para propiedades del material
+            vkCmdPushConstants(
+                cmd,
+                obj.material->shader->pipelineLayout,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                0,
+                sizeof(MaterialPushConstants),
+                &obj.material->pushConstants);
+
+            // Bind buffers
+            VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+            // Bind descriptor set
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    obj.material->shader->pipelineLayout,
+                                    0, 1, &obj.material->descriptorSet, 0, nullptr);
+
+            // Draw
+            vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()), 1, 0, 0, 0);
+        }
+
+        // ✅ PASO 2: Renderizar objetos TRANSPARENTES (de atrás hacia adelante)
+        // Crear lista de objetos transparentes con distancia
+        struct TransparentObject
+        {
+            const RenderObject *obj;
+            float distance;
+        };
+
+        std::vector<TransparentObject> transparentObjects;
+
+        // TODO: Necesitas pasar la posición de la cámara para calcular la distancia
+        // Por ahora, solo los agregamos en el orden que están
+        for (const auto &obj : m_RenderObjects)
+        {
+            if (!obj.mesh || !obj.material || !obj.material->shader)
+                continue;
+
+            if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
+                continue;
+
+            if (!obj.material->shader->pipeline)
+                continue;
+
+            // Solo objetos transparentes
+            if (!obj.material->shader->config.blendEnable)
+                continue;
+
+            transparentObjects.push_back({&obj, 0.0f}); // distance = 0 por ahora
+        }
+
+        // TODO: Ordenar por distancia a la cámara (implementar cuando tengas la posición)
+        // std::sort(transparentObjects.begin(), transparentObjects.end(),
+        //     [](const TransparentObject& a, const TransparentObject& b) {
+        //         return a.distance > b.distance; // Más lejos primero
+        //     });
+
+        // Renderizar transparentes
+        for (const auto &transObj : transparentObjects)
+        {
+            const auto &obj = *transObj.obj;
+
+            // Bind pipeline solo si cambió
+            if (obj.material->shader->pipeline != lastPipeline)
+            {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  obj.material->shader->pipeline);
+                lastPipeline = obj.material->shader->pipeline;
+                lastLayout = obj.material->shader->pipelineLayout;
+            }
+
+            // Push constants
             vkCmdPushConstants(
                 cmd,
                 obj.material->shader->pipelineLayout,
