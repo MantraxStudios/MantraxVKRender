@@ -1,4 +1,5 @@
 #pragma once
+
 #include <vector>
 #include <unordered_map>
 #include <typeindex>
@@ -6,6 +7,7 @@
 #include <tuple>
 #include <algorithm>
 #include <iostream>
+#include <memory>
 
 namespace ecs
 {
@@ -22,12 +24,11 @@ namespace ecs
         static constexpr uint32_t GENERATION_MASK = 0xFF000000;
         static constexpr uint32_t GENERATION_SHIFT = 24;
 
-        Entity() = default;
+        Entity() : id(0) {}
         explicit Entity(EntityId raw) : id(raw) {}
 
         uint32_t index() const { return id & INDEX_MASK; }
-        uint8_t generation() const { return (id >> GENERATION_SHIFT) & 0xFF; }
-
+        uint8_t generation() const { return (id & GENERATION_MASK) >> GENERATION_SHIFT; }
         bool valid() const { return id != 0; }
 
         bool operator==(const Entity &o) const { return id == o.id; }
@@ -51,15 +52,18 @@ namespace ecs
         {
             uint32_t idx = e.index();
             if (idx >= sparse.size())
-            {
                 sparse.resize(idx + 1, -1);
-            }
-            if (sparse[idx] != -1)
-                return; // component already exists
 
-            sparse[idx] = dense.size();
-            denseEntities.push_back(e.id);
-            dense.push_back(component);
+            if (sparse[idx] == -1)
+            {
+                sparse[idx] = static_cast<int>(dense.size());
+                dense.push_back(component);
+                denseEntities.push_back(e.id);
+            }
+            else
+            {
+                dense[sparse[idx]] = component;
+            }
         }
 
         bool has(Entity e) const
@@ -71,33 +75,36 @@ namespace ecs
         T *get(Entity e)
         {
             uint32_t idx = e.index();
-            if (!has(e))
-                return nullptr;
-            return &dense[sparse[idx]];
+            if (idx < sparse.size() && sparse[idx] != -1)
+                return &dense[sparse[idx]];
+            return nullptr;
         }
 
         const T *get(Entity e) const
         {
             uint32_t idx = e.index();
-            if (!has(e))
-                return nullptr;
-            return &dense[sparse[idx]];
+            if (idx < sparse.size() && sparse[idx] != -1)
+                return &dense[sparse[idx]];
+            return nullptr;
         }
 
         void remove(Entity e) override
         {
             uint32_t idx = e.index();
-            if (!has(e))
+            if (idx >= sparse.size() || sparse[idx] == -1)
                 return;
 
-            size_t denseIndex = sparse[idx];
-            size_t last = dense.size() - 1;
+            int denseIdx = sparse[idx];
+            int lastIdx = static_cast<int>(dense.size() - 1);
 
-            // swap-remove
-            dense[denseIndex] = dense[last];
-            denseEntities[denseIndex] = denseEntities[last];
+            if (denseIdx != lastIdx)
+            {
+                dense[denseIdx] = std::move(dense[lastIdx]);
+                denseEntities[denseIdx] = denseEntities[lastIdx];
 
-            sparse[Entity{denseEntities[denseIndex]}.index()] = denseIndex;
+                Entity lastEntity{denseEntities[denseIdx]};
+                sparse[lastEntity.index()] = denseIdx;
+            }
 
             dense.pop_back();
             denseEntities.pop_back();
@@ -124,37 +131,38 @@ namespace ecs
     public:
         Entity createEntity()
         {
-            uint32_t idx;
-            uint8_t gen;
+            uint32_t index;
+            uint8_t gen = 0;
 
             if (!freeIndices.empty())
             {
-                idx = freeIndices.back();
+                index = freeIndices.back();
                 freeIndices.pop_back();
-                gen = generations[idx];
+                gen = generations[index];
             }
             else
             {
-                idx = generations.size();
+                index = static_cast<uint32_t>(generations.size());
                 generations.push_back(0);
-                gen = 0;
             }
 
-            EntityId id = (gen << Entity::GENERATION_SHIFT) | idx;
+            EntityId id = (static_cast<EntityId>(gen) << Entity::GENERATION_SHIFT) | index;
             return Entity{id};
         }
 
         void destroyEntity(Entity e)
         {
-            uint32_t idx = e.index();
-            if (idx >= generations.size())
+            if (!isAlive(e))
                 return;
 
+            uint32_t idx = e.index();
             generations[idx]++;
             freeIndices.push_back(idx);
 
             for (auto &[type, storage] : components)
+            {
                 storage->remove(e);
+            }
         }
 
         bool isAlive(Entity e) const
@@ -168,46 +176,33 @@ namespace ecs
         template <typename T>
         T &addComponent(Entity e, const T &c = T{})
         {
-            return getOrCreateStorage<T>().add(e, c), *getOrCreateStorage<T>().get(e);
+            auto &storage = getOrCreateStorage<T>();
+            storage.add(e, c);
+            return *storage.get(e);
         }
 
         template <typename T>
         bool hasComponent(Entity e) const
         {
-            auto it = components.find(typeid(T));
+            auto it = components.find(std::type_index(typeid(T)));
             if (it == components.end())
                 return false;
-            return static_cast<ComponentStorage<T> *>(it->second.get())->has(e);
+            auto *storage = static_cast<ComponentStorage<T> *>(it->second.get());
+            return storage->has(e);
         }
 
         template <typename T>
         T *getComponent(Entity e)
         {
-            auto it = components.find(typeid(T));
+            auto it = components.find(std::type_index(typeid(T)));
             if (it == components.end())
                 return nullptr;
-            return static_cast<ComponentStorage<T> *>(it->second.get())->get(e);
+            auto *storage = static_cast<ComponentStorage<T> *>(it->second.get());
+            return storage->get(e);
         }
 
-    private:
-        template <typename T>
-        ComponentStorage<T> &getOrCreateStorage()
-        {
-            auto it = components.find(typeid(T));
-            if (it == components.end())
-            {
-                components[typeid(T)] = std::make_unique<ComponentStorage<T>>();
-            }
-            return *static_cast<ComponentStorage<T> *>(components[typeid(T)].get());
-        }
-
-        std::unordered_map<std::type_index, std::unique_ptr<IComponentStorage>> components;
-        std::vector<uint8_t> generations;
-        std::vector<uint32_t> freeIndices;
-
-    public:
         // ========================================================================
-        // VIEW (VARIADIC LIKE ENTT)
+        // VIEW
         // ========================================================================
         template <typename... Cs>
         struct View
@@ -221,7 +216,10 @@ namespace ecs
                 std::tuple<ComponentStorage<Cs> *...> storages;
                 size_t index;
 
-                bool operator!=(const Iterator &other) const { return index != other.index; }
+                bool operator!=(const Iterator &other) const
+                {
+                    return index != other.index;
+                }
 
                 void operator++()
                 {
@@ -249,7 +247,7 @@ namespace ecs
                 template <size_t... I>
                 bool allHasImpl(Entity e, std::index_sequence<I...>)
                 {
-                    return (... && std::get<I>(storages)->has(e));
+                    return (std::get<I>(storages)->has(e) && ...);
                 }
 
                 bool allHas(Entity e)
@@ -260,13 +258,15 @@ namespace ecs
                 auto operator*()
                 {
                     Entity e{std::get<0>(storages)->entities()[index]};
-                    return std::tuple<Entity, Cs &...>{e, *std::get<ComponentStorage<Cs> *>(storages)->get(e)...};
+                    return std::tuple<Entity, Cs &...>{
+                        e,
+                        *std::get<ComponentStorage<Cs> *>(storages)->get(e)...};
                 }
             };
 
             Iterator begin()
             {
-                auto it = Iterator{reg, storages, 0};
+                Iterator it{reg, storages, 0};
                 it.skipInvalid();
                 return it;
             }
@@ -282,6 +282,26 @@ namespace ecs
         {
             return View<Cs...>{this, std::make_tuple(&getOrCreateStorage<Cs>()...)};
         }
+
+    private:
+        template <typename T>
+        ComponentStorage<T> &getOrCreateStorage()
+        {
+            auto type = std::type_index(typeid(T));
+            auto it = components.find(type);
+            if (it == components.end())
+            {
+                auto storage = std::make_unique<ComponentStorage<T>>();
+                auto *ptr = storage.get();
+                components[type] = std::move(storage);
+                return *ptr;
+            }
+            return *static_cast<ComponentStorage<T> *>(it->second.get());
+        }
+
+        std::unordered_map<std::type_index, std::unique_ptr<IComponentStorage>> components;
+        std::vector<uint8_t> generations;
+        std::vector<uint32_t> freeIndices;
     };
 
-}
+} // namespace ecs

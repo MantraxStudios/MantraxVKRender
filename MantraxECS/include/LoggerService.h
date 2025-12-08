@@ -6,8 +6,9 @@
 #include <mutex>
 #include <ctime>
 #include <iostream>
+#include "EngineLoaderDLL.h"
 
-class LoggerService : public IService
+class MANTRAX_API LoggerService : public IService
 {
 private:
     std::ofstream file;

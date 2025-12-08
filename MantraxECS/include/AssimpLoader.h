@@ -6,15 +6,16 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
-#include "../MantraxRender/include/MantraxGFX_API.h"
+#include "../../MantraxRender/include/MantraxGFX_API.h"
+#include "EngineLoaderDLL.h"
 
 namespace Mantrax
 {
-    class AssimpLoader
+    class MANTRAX_API AssimpLoader
     {
     public:
-        AssimpLoader() = default;
-        ~AssimpLoader() = default;
+        AssimpLoader() {}
+        ~AssimpLoader() {}
 
         struct LoadSettings
         {

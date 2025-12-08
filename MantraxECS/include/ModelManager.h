@@ -1,13 +1,14 @@
 #pragma once
-#include "../MantraxRender/include/MantraxGFX_API.h"
-#include "../MantraxECS/include/AssimpLoader.h"
+#include "../../MantraxRender/include/MantraxGFX_API.h"
+#include "AssimpLoader.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
 #include <vector>
 #include <string>
+#include "EngineLoaderDLL.h"
 
-struct RenderableObject
+struct MANTRAX_API RenderableObject
 {
     Mantrax::RenderObject renderObj;
     std::shared_ptr<Mantrax::Material> material;
@@ -18,7 +19,7 @@ struct RenderableObject
     std::string name;
 };
 
-class ModelManager
+class MANTRAX_API ModelManager
 {
 public:
     ModelManager(Mantrax::GFX *gfx);
@@ -59,6 +60,11 @@ public:
     void Clear();
 
 private:
+    ModelManager(const ModelManager &) = delete;
+    ModelManager &operator=(const ModelManager &) = delete;
+    ModelManager(ModelManager &&) = delete;
+    ModelManager &operator=(ModelManager &&) = delete;
+
     Mantrax::GFX *m_gfx;
     std::vector<std::unique_ptr<RenderableObject>> m_models;
     Mantrax::AssimpLoader m_modelLoader;

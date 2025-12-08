@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include <unordered_map>
 #include "IService.h"
+#include "EngineLoaderDLL.h"
 
 namespace Mantrax
 {
@@ -162,7 +163,7 @@ namespace Mantrax
         Button5 = 4
     };
 
-    struct MouseState
+    struct MANTRAX_API MouseState
     {
         POINT position;
         POINT lastPosition;
@@ -171,7 +172,7 @@ namespace Mantrax
         bool firstMouse;
     };
 
-    class InputSystem : public IService
+    class MANTRAX_API InputSystem : public IService
     {
     public:
         InputSystem();

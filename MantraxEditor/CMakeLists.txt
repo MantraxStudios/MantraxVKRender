@@ -1,44 +1,69 @@
 cmake_minimum_required(VERSION 3.15)
-project(MantraxApp)
+project(MantraxEditor)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-file(GLOB ADDON_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/../MantraxAddons/include/imgui/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../MantraxECS/src/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-)
-
-
-# Agregar el ejecutable
-add_executable(MantraxApp WIN32 ${ADDON_SOURCES})
-
-# Incluir directorios de encabezados
-target_include_directories(MantraxApp PRIVATE 
-    ${CMAKE_SOURCE_DIR}           
-    ../MantraxRender/include                
-    ../MantraxAddons/include               
-    ../MantraxECS/include              
-    ../MantraxECS/include/lua           
-)
-
-if(MSVC)
-    set_target_properties(MantraxApp PROPERTIES
-        LINK_FLAGS "/SUBSYSTEM:CONSOLE"
-    )
+# =============================
+# REMOVER FLAGS PROBLEMÁTICOS DE CLANG
+# =============================
+# Estos flags están causando problemas con el linking
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    string(REPLACE "-nostartfiles" "" CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS}")
+    string(REPLACE "-nostdlib" "" CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS}")
+    string(REPLACE "-nostartfiles" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+    string(REPLACE "-nostdlib" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+    
+    set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS}" CACHE STRING "" FORCE)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}" CACHE STRING "" FORCE)
 endif()
 
+# =============================
+# SOLO FUENTES DEL EDITOR
+# =============================
+file(GLOB EDITOR_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/includes/imgui/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.cpp"
+)
 
-# Incluir directorio de bibliotecas
-link_directories(../MantraxRender/libs)     # Directorio de las bibliotecas de Vulkan
+# =============================
+# CREAR EJECUTABLE WIN32
+# =============================
+add_executable(MantraxEditor WIN32 ${EDITOR_SOURCES})
 
-# Buscar todos los archivos .lib en el directorio ../render/libs
-file(GLOB LIBS "../MantraxRender/libs/*.lib ../MantraxAddons/libs/*.lib ../MantraxECS/libs/*.lib")
+# =============================
+# INCLUDES
+# =============================
+target_include_directories(MantraxEditor PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ../MantraxRender/include
+    ../MantraxAddons/include
+    ../MantraxECS/include
+    ../MantraxECS/include/lua
+    ${CMAKE_CURRENT_SOURCE_DIR}/includes
+)
 
-# Enlazar con las bibliotecas de DirectX 12
-target_link_libraries(MantraxApp 
+# =============================
+# LIBRERÍAS
+# =============================
+link_directories(
+    ../MantraxRender/libs
+    ../MantraxAddons/libs
+    ../MantraxECS/libs
+)
+
+# Auto-descubrir .lib
+file(GLOB LIBS
+    "../MantraxRender/libs/*.lib"
+    "../MantraxAddons/libs/*.lib"
+    "../MantraxECS/libs/*.lib"
+)
+
+# =============================
+# LINK A LIBRERÍAS DEL SISTEMA
+# =============================
+target_link_libraries(MantraxEditor 
     d3d12.lib
     dxgi.lib
     d3dcompiler.lib
@@ -54,15 +79,29 @@ target_link_libraries(MantraxApp
     advapi32.lib
 )
 
-# Enlazar con todas las bibliotecas .lib encontradas en ../render/libs
-target_link_libraries(MantraxApp 
-    ${LIBS}  # Las bibliotecas encontradas automáticamente
+# =============================
+# LINK AL DLL DE MANTRAXAPP
+# =============================
+target_link_libraries(MantraxEditor
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MantraxWrapper/build/Mantrax.lib"
 )
 
-# Enlazar con la biblioteca de Vulkan
-target_link_libraries(MantraxApp
-    "${CMAKE_SOURCE_DIR}/../MantraxRender/libs/vulkan-1.lib"
-    "${CMAKE_SOURCE_DIR}/../MantraxAddons/libs/assimp-vc143-mt.lib"
-    "${CMAKE_SOURCE_DIR}/../MantraxECS/libs/lua-5.4.4.lib"
-    "${CMAKE_SOURCE_DIR}/../MantraxECS/libs/lua54.lib"
+# =============================
+# LIBRERÍAS ESPECÍFICAS
+# =============================
+target_link_libraries(MantraxEditor
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MantraxRender/libs/vulkan-1.lib"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MantraxAddons/libs/assimp-vc143-mt.lib"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MantraxECS/libs/lua-5.4.4.lib"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../MantraxECS/libs/lua54.lib"
+)
+
+# =============================
+# COPIAR LA DLL AL EJECUTABLE
+# =============================
+add_custom_command(TARGET MantraxEditor POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/../MantraxWrapper/build/Mantrax.dll"
+        "$<TARGET_FILE_DIR:MantraxEditor>"
+    COMMENT "Copiando MantraxApp.dll al directorio del ejecutable"
 )

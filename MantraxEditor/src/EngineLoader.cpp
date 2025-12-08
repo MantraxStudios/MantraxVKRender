@@ -19,8 +19,8 @@ void EngineLoader::Start(HINSTANCE hInst, const std::function<LRESULT(HWND, UINT
     gfx = std::make_unique<Mantrax::GFX>(hInst, window->GetHWND(), gfxConfig);
 
     // --- Normal shader ---
-    normalShaderConfig.vertexShaderPath = "shaders/pbr.vert.spv";
-    normalShaderConfig.fragmentShaderPath = "shaders/pbr.frag.spv";
+    normalShaderConfig.vertexShaderPath = "shaders/simple.vert.spv";
+    normalShaderConfig.fragmentShaderPath = "shaders/simple.frag.spv";
     normalShaderConfig.vertexBinding = Mantrax::Vertex::GetBindingDescription();
     normalShaderConfig.vertexAttributes = Mantrax::Vertex::GetAttributeDescriptions();
 

@@ -1,9 +1,10 @@
 #pragma once
 #include <string>
+#include "EngineLoaderDLL.h"
 
-class IService
+class MANTRAX_API IService
 {
 public:
-    virtual ~IService() = default;
+    virtual ~IService() {}
     virtual std::string getName() = 0;
 };

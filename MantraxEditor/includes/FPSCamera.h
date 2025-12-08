@@ -15,6 +15,12 @@ namespace Mantrax
         DOWN
     };
 
+    enum class ProjectionMode
+    {
+        Perspective,
+        Orthographic
+    };
+
     class FPSCamera
     {
     public:
@@ -32,7 +38,9 @@ namespace Mantrax
               m_MovementSpeed(15.0f),
               m_MouseSensitivity(0.1f),
               m_SprintMultiplier(2.5f),
-              m_WorldUp(0.0f, 1.0f, 0.0f)
+              m_WorldUp(0.0f, 1.0f, 0.0f),
+              m_ProjectionMode(ProjectionMode::Perspective),
+              m_OrthoSize(10.0f)
         {
             UpdateVectors();
         }
@@ -45,11 +53,25 @@ namespace Mantrax
 
         glm::mat4 GetProjectionMatrix() const
         {
-            glm::mat4 proj = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_NearPlane, m_FarPlane);
+            glm::mat4 proj;
 
-            // IMPORTANTE: Solo invierte Y si estás usando Vulkan
-            // Para OpenGL, comenta esta línea:
-            proj[1][1] *= -1;
+            if (m_ProjectionMode == ProjectionMode::Perspective)
+            {
+                proj = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_NearPlane, m_FarPlane);
+                proj[1][1] *= -1;
+            }
+            else // Orthographic
+            {
+                float halfWidth = m_OrthoSize * m_AspectRatio;
+                float halfHeight = m_OrthoSize;
+
+                // ✅ SOLUCIÓN: Para ortho, usa un rango más amplio y centrado
+                float orthoNear = -100.0f; // Permite objetos DETRÁS de la cámara
+                float orthoFar = 100.0f;   // Y delante
+
+                proj = glm::ortho(-halfWidth, halfWidth, -halfHeight, halfHeight, orthoNear, orthoFar);
+                proj[1][1] *= -1;
+            }
 
             return proj;
         }
@@ -108,19 +130,43 @@ namespace Mantrax
         // Zoom con scroll
         void ProcessMouseScroll(float yoffset)
         {
-            m_FOV -= yoffset;
-            if (m_FOV < 1.0f)
-                m_FOV = 1.0f;
-            if (m_FOV > 120.0f)
-                m_FOV = 120.0f;
+            if (m_ProjectionMode == ProjectionMode::Perspective)
+            {
+                m_FOV -= yoffset;
+                if (m_FOV < 1.0f)
+                    m_FOV = 1.0f;
+                if (m_FOV > 120.0f)
+                    m_FOV = 120.0f;
+            }
+            else // Orthographic
+            {
+                m_OrthoSize -= yoffset * 0.1f;
+                if (m_OrthoSize < 0.5f)
+                    m_OrthoSize = 0.5f;
+                if (m_OrthoSize > 100.0f)
+                    m_OrthoSize = 100.0f;
+            }
         }
 
-        // NUEVO: Actualizar cuando cambie el tamaño de ventana
+        // Actualizar cuando cambie el tamaño de ventana
         void OnWindowResize(int width, int height)
         {
             if (height == 0)
                 height = 1; // Prevenir división por cero
             m_AspectRatio = static_cast<float>(width) / static_cast<float>(height);
+        }
+
+        // Cambiar modo de proyección
+        void SetProjectionMode(ProjectionMode mode)
+        {
+            m_ProjectionMode = mode;
+        }
+
+        void ToggleProjectionMode()
+        {
+            m_ProjectionMode = (m_ProjectionMode == ProjectionMode::Perspective)
+                                   ? ProjectionMode::Orthographic
+                                   : ProjectionMode::Perspective;
         }
 
         // Setters
@@ -149,6 +195,11 @@ namespace Mantrax
             m_FOV = fov;
         }
 
+        void SetOrthoSize(float size)
+        {
+            m_OrthoSize = glm::clamp(size, 0.5f, 100.0f);
+        }
+
         void SetYaw(float yaw)
         {
             m_Yaw = yaw;
@@ -171,6 +222,10 @@ namespace Mantrax
         float GetFOV() const { return m_FOV; }
         float GetMovementSpeed() const { return m_MovementSpeed; }
         float GetAspectRatio() const { return m_AspectRatio; }
+        float GetOrthoSize() const { return m_OrthoSize; }
+        ProjectionMode GetProjectionMode() const { return m_ProjectionMode; }
+        bool IsPerspective() const { return m_ProjectionMode == ProjectionMode::Perspective; }
+        bool IsOrthographic() const { return m_ProjectionMode == ProjectionMode::Orthographic; }
 
     private:
         void UpdateVectors()
@@ -208,6 +263,10 @@ namespace Mantrax
         float m_AspectRatio;
         float m_NearPlane;
         float m_FarPlane;
+
+        // Modo de proyección
+        ProjectionMode m_ProjectionMode;
+        float m_OrthoSize; // Tamaño del viewport ortográfico
     };
 
-} // namespace Mantrax
+}

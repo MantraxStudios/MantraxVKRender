@@ -5,11 +5,12 @@
 
 // STB Image - Incluir en tu proyecto
 #include "stb_image.h"
+#include "EngineLoaderDLL.h"
 
 namespace Mantrax
 {
 
-    struct TextureData
+    struct MANTRAX_API TextureData
     {
         unsigned char *pixels;
         int width;
@@ -25,7 +26,7 @@ namespace Mantrax
         }
     };
 
-    class TextureLoader
+    class MANTRAX_API TextureLoader
     {
     public:
         static std::unique_ptr<TextureData> LoadFromFile(const std::string &filepath, bool flipVertically = true)

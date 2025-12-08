@@ -5,8 +5,9 @@
 #include "ModelManager.h"
 #include <vector>
 #include <memory>
+#include "EngineLoaderDLL.h"
 
-class SceneRenderer : public IService
+class MANTRAX_API SceneRenderer : public IService
 {
 public:
     SceneRenderer(Mantrax::GFX *gfx);

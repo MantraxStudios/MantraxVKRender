@@ -4,25 +4,17 @@
 #include <memory>
 #include <string>
 #include "IService.h"
+#include "EngineLoaderDLL.h"
 
-class ServiceLocator
+class MANTRAX_API ServiceLocator
 {
 private:
     std::unordered_map<std::string, std::shared_ptr<IService>> services;
-
-    ServiceLocator() = default;
+    ServiceLocator() {}
 
 public:
-    static ServiceLocator &instance()
-    {
-        static ServiceLocator inst;
-        return inst;
-    }
-
-    void registerService(const std::string &name, std::shared_ptr<IService> service)
-    {
-        services[name] = service;
-    }
+    static ServiceLocator &instance();
+    void registerService(const std::string &name, std::shared_ptr<IService> service);
 
     template <typename T>
     std::shared_ptr<T> get(const std::string &name)

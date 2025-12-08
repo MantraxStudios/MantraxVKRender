@@ -4,6 +4,12 @@
 
 namespace Mantrax
 {
+    enum class ProjectionMode
+    {
+        Perspective,
+        Orthographic
+    };
+
     class Camera
     {
     public:
@@ -19,7 +25,9 @@ namespace Mantrax
               m_MinDistance(1.0f),
               m_MaxDistance(20.0f),
               m_MinPitch(-89.0f),
-              m_MaxPitch(89.0f)
+              m_MaxPitch(89.0f),
+              m_ProjectionMode(ProjectionMode::Perspective),
+              m_OrthoSize(5.0f)
         {
             UpdateVectors();
         }
@@ -32,7 +40,19 @@ namespace Mantrax
 
         glm::mat4 GetProjectionMatrix() const
         {
-            glm::mat4 proj = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_NearPlane, m_FarPlane);
+            glm::mat4 proj;
+
+            if (m_ProjectionMode == ProjectionMode::Perspective)
+            {
+                proj = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_NearPlane, m_FarPlane);
+            }
+            else // Orthographic
+            {
+                float halfWidth = m_OrthoSize * m_AspectRatio;
+                float halfHeight = m_OrthoSize;
+                proj = glm::ortho(-halfWidth, halfWidth, -halfHeight, halfHeight, m_NearPlane, m_FarPlane);
+            }
+
             proj[1][1] *= -1; // Corrección para Vulkan
             return proj;
         }
@@ -54,14 +74,25 @@ namespace Mantrax
 
         void Zoom(float delta)
         {
-            m_Distance -= delta;
+            if (m_ProjectionMode == ProjectionMode::Perspective)
+            {
+                m_Distance -= delta;
 
-            if (m_Distance < m_MinDistance)
-                m_Distance = m_MinDistance;
-            if (m_Distance > m_MaxDistance)
-                m_Distance = m_MaxDistance;
+                if (m_Distance < m_MinDistance)
+                    m_Distance = m_MinDistance;
+                if (m_Distance > m_MaxDistance)
+                    m_Distance = m_MaxDistance;
 
-            UpdateVectors();
+                UpdateVectors();
+            }
+            else // Orthographic
+            {
+                m_OrthoSize -= delta * 0.1f;
+                if (m_OrthoSize < 0.5f)
+                    m_OrthoSize = 0.5f;
+                if (m_OrthoSize > 50.0f)
+                    m_OrthoSize = 50.0f;
+            }
         }
 
         void Pan(float deltaX, float deltaY)
@@ -69,10 +100,26 @@ namespace Mantrax
             glm::vec3 right = glm::normalize(glm::cross(m_Forward, m_Up));
             glm::vec3 up = glm::normalize(glm::cross(right, m_Forward));
 
-            m_Target += right * deltaX * m_Distance * 0.01f;
-            m_Target += up * deltaY * m_Distance * 0.01f;
+            float panSpeed = (m_ProjectionMode == ProjectionMode::Perspective)
+                                 ? m_Distance * 0.01f
+                                 : m_OrthoSize * 0.01f;
+
+            m_Target += right * deltaX * panSpeed;
+            m_Target += up * deltaY * panSpeed;
 
             UpdateVectors();
+        }
+
+        void SetProjectionMode(ProjectionMode mode)
+        {
+            m_ProjectionMode = mode;
+        }
+
+        void ToggleProjectionMode()
+        {
+            m_ProjectionMode = (m_ProjectionMode == ProjectionMode::Perspective)
+                                   ? ProjectionMode::Orthographic
+                                   : ProjectionMode::Perspective;
         }
 
         // Setters
@@ -98,6 +145,11 @@ namespace Mantrax
             m_FOV = fov;
         }
 
+        void SetOrthoSize(float size)
+        {
+            m_OrthoSize = glm::clamp(size, 0.5f, 50.0f);
+        }
+
         void SetDistanceLimits(float minDist, float maxDist)
         {
             m_MinDistance = minDist;
@@ -117,6 +169,10 @@ namespace Mantrax
         float GetDistance() const { return m_Distance; }
         float GetYaw() const { return m_Yaw; }
         float GetPitch() const { return m_Pitch; }
+        float GetOrthoSize() const { return m_OrthoSize; }
+        ProjectionMode GetProjectionMode() const { return m_ProjectionMode; }
+        bool IsPerspective() const { return m_ProjectionMode == ProjectionMode::Perspective; }
+        bool IsOrthographic() const { return m_ProjectionMode == ProjectionMode::Orthographic; }
 
     private:
         void UpdateVectors()
@@ -148,6 +204,10 @@ namespace Mantrax
         float m_AspectRatio;
         float m_NearPlane;
         float m_FarPlane;
+
+        // Modo de proyección
+        ProjectionMode m_ProjectionMode;
+        float m_OrthoSize; // Tamaño del viewport ortográfico
 
         // Límites
         float m_MinDistance;

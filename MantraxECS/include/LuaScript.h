@@ -3,8 +3,9 @@
 #include <string>
 #include <stdexcept>
 #include <sol/sol.hpp>
+#include "EngineLoaderDLL.h"
 
-class LuaScript
+class MANTRAX_API LuaScript
 {
 public:
     /// Carga y ejecuta el script Lua desde un archivo.
