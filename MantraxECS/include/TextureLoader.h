@@ -3,13 +3,18 @@
 #include <string>
 #include <memory>
 #include <fstream>
+#include <vector>
 
-// STB Image - Incluir en tu proyecto
-#include "stb_image.h"
+// Windows Imaging Component
+#include <wincodec.h>
+#include <wrl/client.h>
+#pragma comment(lib, "windowscodecs.lib")
+
 #include "EngineLoaderDLL.h"
 
 namespace Mantrax
 {
+    using Microsoft::WRL::ComPtr;
 
     struct MANTRAX_API TextureData
     {
@@ -23,7 +28,7 @@ namespace Mantrax
         {
             if (pixels)
             {
-                stbi_image_free(pixels);
+                delete[] pixels;
             }
         }
     };
@@ -31,12 +36,12 @@ namespace Mantrax
     class MANTRAX_API TextureLoader
     {
     public:
-        static std::unique_ptr<TextureData> LoadFromFile(const std::string &filepath, bool flipVertically = true)
+        static std::unique_ptr<TextureData> LoadFromFile(const std::string &filepath, bool flipVertically = false) // ✅ Cambiar default a false
         {
-            std::cout << "\n=== Loading Texture ===" << std::endl;
+            std::cout << "\n=== Loading Texture with WIC ===" << std::endl;
             std::cout << "Path: " << filepath << std::endl;
 
-            // ✅ Verificar que el archivo existe
+            // Verificar que el archivo existe
             std::ifstream file(filepath, std::ios::binary);
             if (!file.good())
             {
@@ -45,70 +50,176 @@ namespace Mantrax
             file.close();
             std::cout << "✅ File exists" << std::endl;
 
-            // ✅ Configurar STB
-            stbi_set_flip_vertically_on_load(flipVertically);
-
             auto data = std::make_unique<TextureData>();
 
-            // ✅ Cargar directamente con RGBA forzado (más simple y confiable)
-            int originalChannels;
-            data->pixels = stbi_load(
-                filepath.c_str(),
-                &data->width,
-                &data->height,
-                &originalChannels,
-                STBI_rgb_alpha // Siempre forzar 4 canales
-            );
+            // Inicializar COM
+            HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+            bool needsUninitialize = SUCCEEDED(hr);
 
-            if (!data->pixels)
+            try
             {
-                std::string error = stbi_failure_reason();
-                throw std::runtime_error("❌ Failed to load texture: " + filepath +
-                                         "\n   STB Error: " + error);
-            }
+                // Crear factory de WIC
+                ComPtr<IWICImagingFactory> factory;
+                hr = CoCreateInstance(
+                    CLSID_WICImagingFactory,
+                    nullptr,
+                    CLSCTX_INPROC_SERVER,
+                    IID_PPV_ARGS(&factory));
 
-            // ✅ Información básica
-            std::cout << "📊 Image info:" << std::endl;
-            std::cout << "   Size: " << data->width << "x" << data->height << std::endl;
-            std::cout << "   Original channels: " << originalChannels << " -> Forced to RGBA (4)" << std::endl;
-
-            data->channels = 4; // Siempre RGBA
-            data->hasAlpha = (originalChannels == 2 || originalChannels == 4);
-
-            // ✅ Validar dimensiones
-            if (data->width <= 0 || data->height <= 0)
-            {
-                throw std::runtime_error("❌ Invalid texture dimensions: " +
-                                         std::to_string(data->width) + "x" +
-                                         std::to_string(data->height));
-            }
-
-            // ✅ Analizar píxeles
-            AnalyzePixels(data->pixels, data->width, data->height, data->hasAlpha);
-
-            // ✅ FIX PRINCIPAL: Si NO tiene alpha original, asegurar que alpha = 255
-            if (!data->hasAlpha)
-            {
-                std::cout << "⚙️ Image has no alpha channel - ensuring all alpha = 255" << std::endl;
-                EnsureOpaqueAlpha(data->pixels, data->width, data->height);
-            }
-            else
-            {
-                // ✅ Si tiene alpha, verificar y corregir premultiplicación
-                std::cout << "⚙️ Image has alpha channel - checking premultiplication" << std::endl;
-                if (IsPremultiplied(data->pixels, data->width, data->height))
+                if (FAILED(hr))
                 {
-                    std::cout << "   ⚠️ Premultiplied alpha detected - unpremultiplying..." << std::endl;
-                    UnpremultiplyAlpha(data->pixels, data->width, data->height);
+                    throw std::runtime_error("❌ Failed to create WIC factory");
                 }
+
+                // Convertir path a wstring
+                std::wstring wpath(filepath.begin(), filepath.end());
+
+                // Crear decoder
+                ComPtr<IWICBitmapDecoder> decoder;
+                hr = factory->CreateDecoderFromFilename(
+                    wpath.c_str(),
+                    nullptr,
+                    GENERIC_READ,
+                    WICDecodeMetadataCacheOnDemand,
+                    &decoder);
+
+                if (FAILED(hr))
+                {
+                    throw std::runtime_error("❌ Failed to create decoder for: " + filepath);
+                }
+
+                // Obtener el primer frame
+                ComPtr<IWICBitmapFrameDecode> frame;
+                hr = decoder->GetFrame(0, &frame);
+                if (FAILED(hr))
+                {
+                    throw std::runtime_error("❌ Failed to get frame");
+                }
+
+                // Obtener dimensiones
+                UINT width, height;
+                frame->GetSize(&width, &height);
+                data->width = static_cast<int>(width);
+                data->height = static_cast<int>(height);
+
+                std::cout << "📊 Image info:" << std::endl;
+                std::cout << "   Size: " << data->width << "x" << data->height << std::endl;
+
+                // Verificar formato de píxeles
+                WICPixelFormatGUID pixelFormat;
+                frame->GetPixelFormat(&pixelFormat);
+
+                // Determinar si tiene alpha
+                data->hasAlpha = !IsEqualGUID(pixelFormat, GUID_WICPixelFormat24bppBGR) &&
+                                 !IsEqualGUID(pixelFormat, GUID_WICPixelFormat24bppRGB);
+
+                std::cout << "   Original format: ";
+                if (IsEqualGUID(pixelFormat, GUID_WICPixelFormat32bppBGRA))
+                    std::cout << "32bpp BGRA" << std::endl;
+                else if (IsEqualGUID(pixelFormat, GUID_WICPixelFormat32bppRGBA))
+                    std::cout << "32bpp RGBA" << std::endl;
+                else if (IsEqualGUID(pixelFormat, GUID_WICPixelFormat24bppBGR))
+                    std::cout << "24bpp BGR" << std::endl;
+                else if (IsEqualGUID(pixelFormat, GUID_WICPixelFormat24bppRGB))
+                    std::cout << "24bpp RGB" << std::endl;
+                else if (IsEqualGUID(pixelFormat, GUID_WICPixelFormat32bppPBGRA))
+                    std::cout << "32bpp Premultiplied BGRA" << std::endl;
                 else
-                {
-                    std::cout << "   ✅ Alpha is straight (not premultiplied)" << std::endl;
-                }
-            }
+                    std::cout << "Unknown format" << std::endl;
 
-            std::cout << "=== Texture Loaded Successfully ===" << std::endl;
-            return data;
+                std::cout << "   Has alpha: " << (data->hasAlpha ? "Yes" : "No") << std::endl;
+
+                // Convertir a BGRA primero (es el formato nativo de WIC)
+                ComPtr<IWICFormatConverter> converter;
+                hr = factory->CreateFormatConverter(&converter);
+                if (FAILED(hr))
+                {
+                    throw std::runtime_error("❌ Failed to create format converter");
+                }
+
+                // ✅ USAR BGRA (formato nativo de WIC) y luego convertir manualmente
+                hr = converter->Initialize(
+                    frame.Get(),
+                    GUID_WICPixelFormat32bppBGRA, // ✅ BGRA es el formato nativo
+                    WICBitmapDitherTypeNone,
+                    nullptr,
+                    0.0,
+                    WICBitmapPaletteTypeCustom);
+
+                if (FAILED(hr))
+                {
+                    throw std::runtime_error("❌ Failed to initialize converter");
+                }
+
+                // Calcular tamaño del buffer
+                data->channels = 4; // Siempre RGBA
+                size_t stride = width * 4;
+                size_t bufferSize = stride * height;
+                data->pixels = new unsigned char[bufferSize];
+
+                // Copiar píxeles
+                hr = converter->CopyPixels(
+                    nullptr,
+                    static_cast<UINT>(stride),
+                    static_cast<UINT>(bufferSize),
+                    data->pixels);
+
+                if (FAILED(hr))
+                {
+                    throw std::runtime_error("❌ Failed to copy pixels");
+                }
+
+                // ✅ IMPORTANTE: Verificar píxeles ANTES de conversión
+                std::cout << "\n🔍 Debug BEFORE conversion:" << std::endl;
+                std::cout << "   First pixel BGRA: ("
+                          << (int)data->pixels[0] << ", "
+                          << (int)data->pixels[1] << ", "
+                          << (int)data->pixels[2] << ", "
+                          << (int)data->pixels[3] << ")" << std::endl;
+
+                // WIC devuelve BGRA, convertir a RGBA
+                ConvertBGRAtoRGBA(data->pixels, width, height);
+
+                std::cout << "\n🔍 Debug AFTER BGRA->RGBA:" << std::endl;
+                std::cout << "   First pixel RGBA: ("
+                          << (int)data->pixels[0] << ", "
+                          << (int)data->pixels[1] << ", "
+                          << (int)data->pixels[2] << ", "
+                          << (int)data->pixels[3] << ")" << std::endl;
+
+                // Voltear verticalmente si es necesario
+                if (flipVertically)
+                {
+                    FlipVertically(data->pixels, width, height);
+                }
+
+                // Si no tiene alpha original, asegurar que alpha = 255
+                if (!data->hasAlpha)
+                {
+                    std::cout << "⚙️ Ensuring opaque alpha" << std::endl;
+                    EnsureOpaqueAlpha(data->pixels, width, height);
+                }
+
+                // Analizar píxeles
+                AnalyzePixels(data->pixels, data->width, data->height, data->hasAlpha);
+
+                std::cout << "=== Texture Loaded Successfully ===" << std::endl;
+
+                if (needsUninitialize)
+                {
+                    CoUninitialize();
+                }
+
+                return data;
+            }
+            catch (...)
+            {
+                if (needsUninitialize)
+                {
+                    CoUninitialize();
+                }
+                throw;
+            }
         }
 
         static std::unique_ptr<TextureData> CreateCheckerboard(int width = 256, int height = 256)
@@ -120,7 +231,7 @@ namespace Mantrax
             data->hasAlpha = false;
 
             size_t imageSize = width * height * 4;
-            data->pixels = (unsigned char *)malloc(imageSize);
+            data->pixels = new unsigned char[imageSize];
 
             for (int y = 0; y < height; y++)
             {
@@ -152,7 +263,7 @@ namespace Mantrax
             data->hasAlpha = (a < 255);
 
             size_t imageSize = width * height * 4;
-            data->pixels = (unsigned char *)malloc(imageSize);
+            data->pixels = new unsigned char[imageSize];
 
             for (int i = 0; i < width * height; i++)
             {
@@ -167,13 +278,52 @@ namespace Mantrax
         }
 
     private:
+        static void ConvertBGRAtoRGBA(unsigned char *pixels, int width, int height)
+        {
+            int totalPixels = width * height;
+            for (int i = 0; i < totalPixels; i++)
+            {
+                int idx = i * 4;
+                // Swap B y R (BGRA -> RGBA)
+                unsigned char temp = pixels[idx + 0];
+                pixels[idx + 0] = pixels[idx + 2];
+                pixels[idx + 2] = temp;
+            }
+        }
+
+        static void FlipVertically(unsigned char *pixels, int width, int height)
+        {
+            int stride = width * 4;
+            std::vector<unsigned char> rowBuffer(stride);
+
+            for (int y = 0; y < height / 2; y++)
+            {
+                unsigned char *row1 = pixels + y * stride;
+                unsigned char *row2 = pixels + (height - 1 - y) * stride;
+
+                // Swap rows
+                memcpy(rowBuffer.data(), row1, stride);
+                memcpy(row1, row2, stride);
+                memcpy(row2, rowBuffer.data(), stride);
+            }
+        }
+
+        static void EnsureOpaqueAlpha(unsigned char *pixels, int width, int height)
+        {
+            int totalPixels = width * height;
+            for (int i = 0; i < totalPixels; i++)
+            {
+                pixels[i * 4 + 3] = 255;
+            }
+        }
+
         static void AnalyzePixels(unsigned char *pixels, int width, int height, bool hasAlpha)
         {
             std::cout << "\n📊 Pixel Analysis:" << std::endl;
 
             int totalPixels = width * height;
 
-            // Mostrar algunos píxeles de muestra
+            // Mostrar píxeles de muestra
             std::cout << "   First pixel RGBA: ("
                       << (int)pixels[0] << ", "
                       << (int)pixels[1] << ", "
@@ -197,7 +347,6 @@ namespace Mantrax
                           << (int)pixels[lastIdx + 3] << ")" << std::endl;
             }
 
-            // Estadísticas de alpha (solo si tiene alpha)
             if (hasAlpha)
             {
                 int fullyTransparent = 0;
@@ -223,101 +372,6 @@ namespace Mantrax
                 std::cout << "      Opaque (255): " << fullyOpaque << " (" << opaquePercent << "%)" << std::endl;
                 std::cout << "      Semi-transparent: " << semiTransparent << " (" << semiPercent << "%)" << std::endl;
                 std::cout << "      Transparent (0): " << fullyTransparent << " (" << transPercent << "%)" << std::endl;
-            }
-
-            // Detectar imagen completamente negra
-            bool allBlack = true;
-            for (int i = 0; i < totalPixels && allBlack; i++)
-            {
-                int idx = i * 4;
-                if (pixels[idx] > 0 || pixels[idx + 1] > 0 || pixels[idx + 2] > 0)
-                {
-                    allBlack = false;
-                }
-            }
-
-            if (allBlack)
-            {
-                std::cout << "   ⚠️ WARNING: All RGB pixels are black!" << std::endl;
-            }
-        }
-
-        // ✅ FIX: Asegurar que alpha = 255 para imágenes sin canal alpha
-        static void EnsureOpaqueAlpha(unsigned char *pixels, int width, int height)
-        {
-            int totalPixels = width * height;
-            for (int i = 0; i < totalPixels; i++)
-            {
-                pixels[i * 4 + 3] = 255;
-            }
-        }
-
-        // ✅ Mejorado: Detección más robusta de premultiplicación
-        static bool IsPremultiplied(unsigned char *pixels, int width, int height)
-        {
-            int totalPixels = width * height;
-            // Usar más muestras para imágenes pequeñas
-            int sampleCount = std::min(std::max(10, totalPixels / 10), 1000);
-            int premultVotes = 0;
-            int checkedSamples = 0;
-
-            for (int i = 0; i < sampleCount; i++)
-            {
-                // Muestreo distribuido uniformemente
-                int pixelIndex = (i * totalPixels / sampleCount);
-                int idx = pixelIndex * 4;
-
-                unsigned char r = pixels[idx + 0];
-                unsigned char g = pixels[idx + 1];
-                unsigned char b = pixels[idx + 2];
-                unsigned char a = pixels[idx + 3];
-
-                // Solo verificar píxeles semi-transparentes
-                if (a > 0 && a < 255)
-                {
-                    checkedSamples++;
-                    // Si RGB están todos dentro del rango de alpha, probablemente premultiplicado
-                    if (r <= a && g <= a && b <= a)
-                    {
-                        premultVotes++;
-                    }
-                }
-            }
-
-            // Si no hay píxeles semi-transparentes, asumir no premultiplicado
-            if (checkedSamples == 0)
-            {
-                return false;
-            }
-
-            // Considerar premultiplicado si >60% de muestras lo indican
-            float premultRatio = (float)premultVotes / checkedSamples;
-            std::cout << "      Premult check: " << premultVotes << "/" << checkedSamples
-                      << " samples (" << (premultRatio * 100.0f) << "%)" << std::endl;
-
-            return premultRatio > 0.6f;
-        }
-
-        static void UnpremultiplyAlpha(unsigned char *pixels, int width, int height)
-        {
-            int totalPixels = width * height;
-            for (int i = 0; i < totalPixels; i++)
-            {
-                int idx = i * 4;
-                unsigned char a = pixels[idx + 3];
-
-                // Solo despremultiplicar píxeles semi-transparentes
-                if (a > 0 && a < 255)
-                {
-                    float alpha = a / 255.0f;
-                    float invAlpha = 1.0f / alpha;
-
-                    pixels[idx + 0] = (unsigned char)std::min(255.0f, pixels[idx + 0] * invAlpha);
-                    pixels[idx + 1] = (unsigned char)std::min(255.0f, pixels[idx + 1] * invAlpha);
-                    pixels[idx + 2] = (unsigned char)std::min(255.0f, pixels[idx + 2] * invAlpha);
-                }
-                // a == 0: dejar RGB como está (completamente transparente)
-                // a == 255: dejar RGB como está (completamente opaco)
             }
         }
     };

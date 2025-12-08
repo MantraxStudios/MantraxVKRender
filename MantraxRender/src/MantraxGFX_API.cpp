@@ -67,20 +67,17 @@ namespace Mantrax
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                      stagingBuffer, stagingMemory);
 
-        // Copiar datos
         void *mappedData;
         vkMapMemory(m_Device, stagingMemory, 0, imageSize, 0, &mappedData);
         memcpy(mappedData, data, imageSize);
         vkUnmapMemory(m_Device, stagingMemory);
 
-        // Crear imagen
         CreateImage(width, height, VK_FORMAT_R8G8B8A8_UNORM,
                     VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                     texture->image, texture->memory);
 
-        // Transicionar imagen y copiar datos
         TransitionImageLayout(texture->image, VK_FORMAT_R8G8B8A8_UNORM,
                               VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -91,32 +88,66 @@ namespace Mantrax
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-        // Limpiar staging buffer
         vkDestroyBuffer(m_Device, stagingBuffer, nullptr);
         vkFreeMemory(m_Device, stagingMemory, nullptr);
 
-        // Crear image view
         texture->imageView = CreateImageView(texture->image, VK_FORMAT_R8G8B8A8_UNORM,
                                              VK_IMAGE_ASPECT_COLOR_BIT);
 
-        // Crear sampler
+        // ✅ SAMPLER MEJORADO - Configuración óptima para texturas pequeñas
         VkSamplerCreateInfo samplerInfo{};
         samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        samplerInfo.magFilter = VK_FILTER_LINEAR;
-        samplerInfo.minFilter = VK_FILTER_LINEAR;
-        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.anisotropyEnable = VK_TRUE;
-        samplerInfo.maxAnisotropy = 16.0f;
+
+        // ✅ Para texturas pequeñas/pixel art: NEAREST
+        // Para texturas normales: LINEAR
+        // Puedes detectar automáticamente:
+        if (width <= 16 || height <= 16)
+        {
+            // Texturas muy pequeñas o pixel art
+            samplerInfo.magFilter = VK_FILTER_NEAREST;
+            samplerInfo.minFilter = VK_FILTER_NEAREST;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        }
+        else
+        {
+            // Texturas normales
+            samplerInfo.magFilter = VK_FILTER_LINEAR;
+            samplerInfo.minFilter = VK_FILTER_LINEAR;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        }
+
+        // ✅ CLAMP_TO_EDGE evita que se repita la textura
+        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+        // ✅ Anisotropía desactivada para texturas pequeñas (mejora rendimiento)
+        if (width <= 16 || height <= 16)
+        {
+            samplerInfo.anisotropyEnable = VK_FALSE;
+            samplerInfo.maxAnisotropy = 1.0f;
+        }
+        else
+        {
+            samplerInfo.anisotropyEnable = VK_TRUE;
+            samplerInfo.maxAnisotropy = 16.0f;
+        }
+
         samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-        samplerInfo.unnormalizedCoordinates = VK_FALSE;
+        samplerInfo.unnormalizedCoordinates = VK_FALSE; // ✅ Coordenadas normalizadas (0-1)
         samplerInfo.compareEnable = VK_FALSE;
         samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+        // ✅ LOD correcto para evitar problemas con texturas pequeñas
+        samplerInfo.mipLodBias = 0.0f;
+        samplerInfo.minLod = 0.0f;
+        samplerInfo.maxLod = 0.0f; // Sin mipmaps por ahora
 
         if (vkCreateSampler(m_Device, &samplerInfo, nullptr, &texture->sampler) != VK_SUCCESS)
             throw std::runtime_error("Error creando sampler de textura");
+
+        std::cout << "✅ Textura creada: " << width << "x" << height
+                  << " (Filtro: " << (width <= 16 ? "NEAREST" : "LINEAR") << ")" << std::endl;
 
         return texture;
     }
@@ -1259,7 +1290,7 @@ namespace Mantrax
         colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
         VkAttachmentDescription depthAttachment{};
         depthAttachment.format = depthFormat;
@@ -1886,7 +1917,7 @@ namespace Mantrax
         colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
         VkAttachmentDescription depthAttachment{};
         depthAttachment.format = m_DepthFormat;
@@ -2099,7 +2130,8 @@ namespace Mantrax
             cba.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
             cba.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
             cba.colorBlendOp = VK_BLEND_OP_ADD;
-            cba.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+
+            cba.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
             cba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
             cba.alphaBlendOp = VK_BLEND_OP_ADD;
         }
@@ -2406,7 +2438,6 @@ namespace Mantrax
             if (obj.material->shader->config.blendEnable)
                 continue;
 
-            // Bind pipeline solo si cambió
             if (obj.material->shader->pipeline != lastPipeline)
             {
                 vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -2415,7 +2446,6 @@ namespace Mantrax
                 lastLayout = obj.material->shader->pipelineLayout;
             }
 
-            // Push constants para propiedades del material
             vkCmdPushConstants(
                 cmd,
                 obj.material->shader->pipelineLayout,
@@ -2424,33 +2454,22 @@ namespace Mantrax
                 sizeof(MaterialPushConstants),
                 &obj.material->pushConstants);
 
-            // Bind buffers
             VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
             VkDeviceSize offsets[] = {0};
             vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
             vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-            // Bind descriptor set
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     obj.material->shader->pipelineLayout,
                                     0, 1, &obj.material->descriptorSet, 0, nullptr);
 
-            // Draw
             vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()), 1, 0, 0, 0);
         }
 
-        // ✅ PASO 2: Renderizar objetos TRANSPARENTES (de atrás hacia adelante)
-        // Crear lista de objetos transparentes con distancia
-        struct TransparentObject
-        {
-            const RenderObject *obj;
-            float distance;
-        };
+        // ✅ PASO 2: Renderizar objetos TRANSPARENTES
+        // NOTA: Para ordenar correctamente necesitas la posición de la cámara en RenderObject
+        // Por ahora renderizamos en el orden que están, lo cual funciona para muchos casos
 
-        std::vector<TransparentObject> transparentObjects;
-
-        // TODO: Necesitas pasar la posición de la cámara para calcular la distancia
-        // Por ahora, solo los agregamos en el orden que están
         for (const auto &obj : m_RenderObjects)
         {
             if (!obj.mesh || !obj.material || !obj.material->shader)
@@ -2465,20 +2484,6 @@ namespace Mantrax
             // Solo objetos transparentes
             if (!obj.material->shader->config.blendEnable)
                 continue;
-
-            transparentObjects.push_back({&obj, 0.0f}); // distance = 0 por ahora
-        }
-
-        // TODO: Ordenar por distancia a la cámara (implementar cuando tengas la posición)
-        // std::sort(transparentObjects.begin(), transparentObjects.end(),
-        //     [](const TransparentObject& a, const TransparentObject& b) {
-        //         return a.distance > b.distance; // Más lejos primero
-        //     });
-
-        // Renderizar transparentes
-        for (const auto &transObj : transparentObjects)
-        {
-            const auto &obj = *transObj.obj;
 
             // Bind pipeline solo si cambió
             if (obj.material->shader->pipeline != lastPipeline)

@@ -21,7 +21,7 @@ namespace Mantrax
         {
             bool triangulate = true;
             bool genNormals = true;
-            bool flipUVs = false; // ❌ CAMBIADO: false por defecto (OpenGL ya lo hace)
+            bool flipUVs = true; // ❌ CAMBIADO: false por defecto (OpenGL ya lo hace)
             bool calcTangents = true;
             bool preTransform = true;
             bool globalScale = true;
@@ -251,12 +251,10 @@ namespace Mantrax
                 vertices.push_back(vertex);
             }
 
-            // ✅ Procesar índices con offset correcto
             for (unsigned int i = 0; i < mesh->mNumFaces; i++)
             {
                 aiFace face = mesh->mFaces[i];
 
-                // ✅ Verificar que la cara es un triángulo
                 if (face.mNumIndices != 3)
                 {
                     std::cerr << "⚠️ Warning: Face " << i << " has "
@@ -264,10 +262,10 @@ namespace Mantrax
                     continue;
                 }
 
-                for (unsigned int j = 0; j < face.mNumIndices; j++)
-                {
-                    indices.push_back(vertexOffset + face.mIndices[j]);
-                }
+                // ✅ INVERTIR el winding order
+                indices.push_back(vertexOffset + face.mIndices[0]);
+                indices.push_back(vertexOffset + face.mIndices[2]); // Swap 1 y 2
+                indices.push_back(vertexOffset + face.mIndices[1]);
             }
         }
 

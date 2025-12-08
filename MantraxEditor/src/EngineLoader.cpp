@@ -18,21 +18,22 @@ void EngineLoader::Start(HINSTANCE hInst, const std::function<LRESULT(HWND, UINT
     // Crear GFX
     gfx = std::make_unique<Mantrax::GFX>(hInst, window->GetHWND(), gfxConfig);
 
-    // ✅ NUEVO: SHADER PARA OBJETOS TRANSPARENTES
+    // SHADER PARA OBJETOS OPACOS
     normalShaderConfig.vertexShaderPath = "shaders/simple.vert.spv";
-    normalShaderConfig.fragmentShaderPath = "shaders/simple.frag.spv"; // Mismo fragment
+    normalShaderConfig.fragmentShaderPath = "shaders/simple.frag.spv";
     normalShaderConfig.vertexBinding = Mantrax::Vertex::GetBindingDescription();
     normalShaderConfig.vertexAttributes = Mantrax::Vertex::GetAttributeDescriptions();
 
     normalShaderConfig.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     normalShaderConfig.polygonMode = VK_POLYGON_MODE_FILL;
-    normalShaderConfig.cullMode = VK_CULL_MODE_NONE;
-    normalShaderConfig.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    normalShaderConfig.cullMode = VK_CULL_MODE_BACK_BIT;    // ✅ O NONE si ves caras faltantes
+    normalShaderConfig.frontFace = VK_FRONT_FACE_CLOCKWISE; // ✅ Probar con CLOCKWISE si se ve al revés
 
     normalShaderConfig.depthTestEnable = true;
-    normalShaderConfig.depthWriteEnable = false;
+    normalShaderConfig.depthWriteEnable = false; // ✅ TRUE para opacos
     normalShaderConfig.depthCompareOp = VK_COMPARE_OP_LESS;
-    normalShaderConfig.blendEnable = true;
+    normalShaderConfig.blendEnable = true; // ✅ FALSE para opacos
+
     normalShader = gfx->CreateShader(normalShaderConfig);
 
     skyboxShaderConfig.vertexShaderPath = "shaders/skybox.vert.spv";

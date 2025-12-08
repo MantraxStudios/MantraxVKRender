@@ -121,12 +121,6 @@ void ModelManager::DestroyModel(RenderableObject *obj)
     }
 }
 
-// En ModelManager.h
-RenderableObject *CreateModelOnly(
-    const std::string &modelPath,
-    const std::string &name);
-
-// En ModelManager.cpp
 RenderableObject *ModelManager::CreateModelOnly(
     const std::string &modelPath,
     const std::string &name)
@@ -154,9 +148,9 @@ RenderableObject *ModelManager::CreateModelOnly(
     obj->position = glm::vec3(0.0f);
     obj->rotation = glm::vec3(0.0f);
     obj->scale = glm::vec3(1.0f);
-    obj->material = nullptr; // Se asignará después
+    obj->material = nullptr;
     obj->renderObj.mesh = mesh;
-    obj->renderObj.material = nullptr; // Se asignará después
+    obj->renderObj.material = nullptr;
     obj->name = name;
 
     auto ptr = obj.get();
@@ -193,42 +187,42 @@ void ModelManager::Clear()
     m_models.clear();
 }
 
+// ✅ NUEVA IMPLEMENTACIÓN: Usa WIC a través de TextureLoader
 std::shared_ptr<Mantrax::Texture> ModelManager::LoadTexture(
     const std::string &path,
     const std::string &name)
 {
-    int width, height, channels;
-    stbi_set_flip_vertically_on_load(true);
-
-    // ✅ Cargar con 4 canales forzados (RGBA)
-    unsigned char *data = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
-
-    if (!data)
+    try
     {
-        std::cerr << "Failed to load " << name << " texture: " << path << std::endl;
-        std::cerr << "STB Error: " << stbi_failure_reason() << std::endl;
+        std::cout << "Loading " << name << " texture: " << path << std::endl;
+
+        // ✅ Usar tu TextureLoader con WIC (SIN flip porque Assimp ya lo hace)
+        auto textureData = Mantrax::TextureLoader::LoadFromFile(path, false);
+
+        if (!textureData || !textureData->pixels)
+        {
+            std::cerr << "❌ Failed to load " << name << " texture: " << path << std::endl;
+            return nullptr;
+        }
+
+        // ✅ Información de debug
+        std::cout << "✓ Loaded " << name << std::endl;
+        std::cout << "  Size: " << textureData->width << "x" << textureData->height << std::endl;
+        std::cout << "  Channels: " << textureData->channels << " (RGBA)" << std::endl;
+        std::cout << "  Has alpha: " << (textureData->hasAlpha ? "YES" : "NO") << std::endl;
+
+        // ✅ Crear textura en el GFX
+        auto texture = m_gfx->CreateTexture(
+            textureData->pixels,
+            textureData->width,
+            textureData->height);
+
+        // textureData se destruye automáticamente (unique_ptr)
+        return texture;
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "❌ Exception loading " << name << ": " << e.what() << std::endl;
         return nullptr;
     }
-
-    // ✅ DEBUG: Verificar que tenemos datos válidos
-    std::cout << "✓ Loaded " << name << ": " << path << std::endl;
-    std::cout << "  Size: " << width << "x" << height << std::endl;
-    std::cout << "  Original channels: " << channels << " (forced to 4 RGBA)" << std::endl;
-
-    // ✅ DEBUG: Verificar canal alpha
-    bool hasTransparency = false;
-    for (int i = 0; i < width * height; i++)
-    {
-        if (data[i * 4 + 3] < 255) // Revisar canal alpha
-        {
-            hasTransparency = true;
-            break;
-        }
-    }
-    std::cout << "  Has transparency: " << (hasTransparency ? "YES" : "NO") << std::endl;
-
-    auto texture = m_gfx->CreateTexture(data, width, height);
-    stbi_image_free(data);
-
-    return texture;
 }
