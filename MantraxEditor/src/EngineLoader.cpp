@@ -30,9 +30,9 @@ void EngineLoader::Start(HINSTANCE hInst, const std::function<LRESULT(HWND, UINT
     normalShaderConfig.frontFace = VK_FRONT_FACE_CLOCKWISE; // ✅ Probar con CLOCKWISE si se ve al revés
 
     normalShaderConfig.depthTestEnable = true;
-    normalShaderConfig.depthWriteEnable = false; // ✅ TRUE para opacos
+    normalShaderConfig.depthWriteEnable = true; // ✅ TRUE para opacos
     normalShaderConfig.depthCompareOp = VK_COMPARE_OP_LESS;
-    normalShaderConfig.blendEnable = true; // ✅ FALSE para opacos
+    normalShaderConfig.blendEnable = false; // ✅ FALSE para opacos
 
     normalShader = gfx->CreateShader(normalShaderConfig);
 

@@ -18,44 +18,37 @@ layout(binding = 0) uniform UniformBufferObject {
 layout(binding = 1) uniform sampler2D albedoMap;
 
 void main() {
-    // ===== DIAGNÓSTICO AVANZADO DE TEXTURA =====
+    // Samplear textura
     vec4 texColor = texture(albedoMap, fragTexCoord);
     
-    // Opción A: Multiplicar por un factor para ver si hay datos oscuros
-    outColor = vec4(texColor.rgb * 10.0, 1.0); // Amplificar x10
-    
-    // Opción B: Ver cada canal por separado (descomentar para probar)
-    // outColor = vec4(texColor.r, 0.0, 0.0, 1.0); // Solo canal ROJO
-    // outColor = vec4(0.0, texColor.g, 0.0, 1.0); // Solo canal VERDE
-    // outColor = vec4(0.0, 0.0, texColor.b, 1.0); // Solo canal AZUL
-    // outColor = vec4(texColor.aaa, 1.0); // Ver canal ALPHA
-    
-    // Opción C: Ver si hay ALGÚN dato (descomentar para probar)
-    // float brightness = (texColor.r + texColor.g + texColor.b) / 3.0;
-    // outColor = vec4(vec3(brightness * 50.0), 1.0); // Amplificar brillo
-    
-    /* ILUMINACIÓN FINAL
-    vec4 texColor = texture(albedoMap, fragTexCoord);
-    
-    // Fallback: si la textura es negra, usar gris
-    vec3 albedo = texColor.rgb;
-    if (length(albedo) < 0.01) {
-        albedo = vec3(0.5); // Gris por defecto
+    // Alpha test para texturas con cortes
+    if (texColor.a < 0.1) {
+        discard;
     }
     
+    // Iluminación mejorada con más brillo
     vec3 N = normalize(fragNormal);
     vec3 lightDir = normalize(vec3(1.0, 1.0, 0.5));
     vec3 viewDir = normalize(fragCameraPos - fragWorldPos);
     
-    vec3 ambient = vec3(0.3);
-    float diff = max(dot(N, lightDir), 0.0);
-    vec3 diffuse = vec3(0.8) * diff;
+    // ✅ Ambient MÁS ALTO (más luz base)
+    vec3 ambient = vec3(0.6); // Era 0.3, ahora 0.6 (doble)
     
+    // ✅ Diffuse MÁS INTENSO
+    float diff = max(dot(N, lightDir), 0.0);
+    vec3 diffuse = vec3(1.2) * diff; // Era 0.8, ahora 1.2
+    
+    // ✅ Specular más brillante
     vec3 reflectDir = reflect(-lightDir, N);
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-    vec3 specular = vec3(0.5) * spec;
+    vec3 specular = vec3(0.8) * spec; // Era 0.5, ahora 0.8
     
-    vec3 result = (ambient + diffuse + specular) * albedo;
-    outColor = vec4(result, 1.0);
-    */
+    // Combinar iluminación
+    vec3 result = (ambient + diffuse + specular) * texColor.rgb;
+    
+    // ✅ OPCIONAL: Aplicar un multiplicador general de brillo
+    result *= 1.2; // Aumentar brillo general un 20%
+    
+    // Salida final
+    outColor = vec4(result, texColor.a);
 }

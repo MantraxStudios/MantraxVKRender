@@ -111,9 +111,9 @@ namespace Mantrax
         else
         {
             // Texturas normales
-            samplerInfo.magFilter = VK_FILTER_LINEAR;
-            samplerInfo.minFilter = VK_FILTER_LINEAR;
-            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            samplerInfo.magFilter = VK_FILTER_NEAREST;
+            samplerInfo.minFilter = VK_FILTER_NEAREST;
+            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
         }
 
         // ✅ CLAMP_TO_EDGE evita que se repita la textura

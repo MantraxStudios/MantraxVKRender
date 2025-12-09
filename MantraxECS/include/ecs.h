@@ -3,16 +3,14 @@
 #include <vector>
 #include <unordered_map>
 #include <typeindex>
-#include <cassert>
-#include <tuple>
-#include <algorithm>
-#include <iostream>
 #include <memory>
+#include <algorithm>
+#include <string>
 
 namespace ecs
 {
     // ============================================================================
-    // ENTITY
+    // ENTITY (con generaciones para reutilizar IDs de forma segura)
     // ============================================================================
     using EntityId = uint32_t;
 
@@ -24,58 +22,65 @@ namespace ecs
         static constexpr uint32_t GENERATION_MASK = 0xFF000000;
         static constexpr uint32_t GENERATION_SHIFT = 24;
 
-        Entity() : id(0) {}
+        Entity() = default;
         explicit Entity(EntityId raw) : id(raw) {}
 
         uint32_t index() const { return id & INDEX_MASK; }
         uint8_t generation() const { return (id & GENERATION_MASK) >> GENERATION_SHIFT; }
-        bool valid() const { return id != 0; }
+        bool isValid() const { return id != 0; }
 
         bool operator==(const Entity &o) const { return id == o.id; }
         bool operator!=(const Entity &o) const { return id != o.id; }
     };
 
     // ============================================================================
-    // COMPONENT STORAGE (SparseSet)
+    // COMPONENT STORAGE (SparseSet optimizado)
     // ============================================================================
     struct IComponentStorage
     {
         virtual ~IComponentStorage() = default;
         virtual void remove(Entity e) = 0;
+        virtual bool has(Entity e) const = 0;
+        virtual size_t size() const = 0;
     };
 
     template <typename T>
     class ComponentStorage : public IComponentStorage
     {
     public:
-        void add(Entity e, const T &component = T{})
+        ComponentStorage() { sparse.reserve(64); }
+
+        T &add(Entity e, T component = T{})
         {
             uint32_t idx = e.index();
-            if (idx >= sparse.size())
-                sparse.resize(idx + 1, -1);
 
-            if (sparse[idx] == -1)
+            if (idx >= sparse.size())
+                sparse.resize(idx + 1, INVALID_INDEX);
+
+            if (sparse[idx] != INVALID_INDEX)
             {
-                sparse[idx] = static_cast<int>(dense.size());
-                dense.push_back(component);
-                denseEntities.push_back(e.id);
+                dense[sparse[idx]] = std::move(component);
+                return dense[sparse[idx]];
             }
-            else
-            {
-                dense[sparse[idx]] = component;
-            }
+
+            uint32_t denseIdx = static_cast<uint32_t>(dense.size());
+            sparse[idx] = denseIdx;
+            dense.push_back(std::move(component));
+            entities.push_back(e);
+
+            return dense[denseIdx];
         }
 
-        bool has(Entity e) const
+        bool has(Entity e) const override
         {
             uint32_t idx = e.index();
-            return idx < sparse.size() && sparse[idx] != -1;
+            return idx < sparse.size() && sparse[idx] != INVALID_INDEX;
         }
 
         T *get(Entity e)
         {
             uint32_t idx = e.index();
-            if (idx < sparse.size() && sparse[idx] != -1)
+            if (idx < sparse.size() && sparse[idx] != INVALID_INDEX)
                 return &dense[sparse[idx]];
             return nullptr;
         }
@@ -83,7 +88,7 @@ namespace ecs
         const T *get(Entity e) const
         {
             uint32_t idx = e.index();
-            if (idx < sparse.size() && sparse[idx] != -1)
+            if (idx < sparse.size() && sparse[idx] != INVALID_INDEX)
                 return &dense[sparse[idx]];
             return nullptr;
         }
@@ -91,44 +96,64 @@ namespace ecs
         void remove(Entity e) override
         {
             uint32_t idx = e.index();
-            if (idx >= sparse.size() || sparse[idx] == -1)
+            if (idx >= sparse.size() || sparse[idx] == INVALID_INDEX)
                 return;
 
-            int denseIdx = sparse[idx];
-            int lastIdx = static_cast<int>(dense.size() - 1);
+            uint32_t denseIdx = sparse[idx];
+            uint32_t lastIdx = static_cast<uint32_t>(dense.size() - 1);
 
             if (denseIdx != lastIdx)
             {
                 dense[denseIdx] = std::move(dense[lastIdx]);
-                denseEntities[denseIdx] = denseEntities[lastIdx];
-
-                Entity lastEntity{denseEntities[denseIdx]};
-                sparse[lastEntity.index()] = denseIdx;
+                entities[denseIdx] = entities[lastIdx];
+                sparse[entities[denseIdx].index()] = denseIdx;
             }
 
             dense.pop_back();
-            denseEntities.pop_back();
-            sparse[idx] = -1;
+            entities.pop_back();
+            sparse[idx] = INVALID_INDEX;
         }
+
+        size_t size() const override { return dense.size(); }
 
         std::vector<T> &data() { return dense; }
         const std::vector<T> &data() const { return dense; }
 
-        std::vector<EntityId> &entities() { return denseEntities; }
-        const std::vector<EntityId> &entities() const { return denseEntities; }
+        std::vector<Entity> &getEntities() { return entities; }
+        const std::vector<Entity> &getEntities() const { return entities; }
 
     private:
+        static constexpr uint32_t INVALID_INDEX = static_cast<uint32_t>(-1);
+
         std::vector<T> dense;
-        std::vector<EntityId> denseEntities;
-        std::vector<int> sparse;
+        std::vector<Entity> entities;
+        std::vector<uint32_t> sparse;
     };
 
     // ============================================================================
-    // REGISTRY
+    // WORLD (Registry estilo Unity)
     // ============================================================================
-    class Registry
+    class World
     {
     public:
+        World()
+        {
+            generations.reserve(1024);
+            freeIndices.reserve(256);
+        }
+
+        // Deshabilitar copia (tiene unique_ptr en el map)
+        World(const World &) = delete;
+        World &operator=(const World &) = delete;
+
+        // Habilitar movimiento
+        World(World &&) noexcept = default;
+        World &operator=(World &&) noexcept = default;
+
+        // ========================================================================
+        // ENTITY MANAGEMENT
+        // ========================================================================
+
         Entity createEntity()
         {
             uint32_t index;
@@ -159,128 +184,239 @@ namespace ecs
             generations[idx]++;
             freeIndices.push_back(idx);
 
-            for (auto &[type, storage] : components)
-            {
+            for (auto &[type, storage] : storages)
                 storage->remove(e);
-            }
         }
 
         bool isAlive(Entity e) const
         {
             uint32_t idx = e.index();
-            if (idx >= generations.size())
-                return false;
-            return generations[idx] == e.generation();
+            return idx < generations.size() && generations[idx] == e.generation();
         }
 
-        template <typename T>
-        T &addComponent(Entity e, const T &c = T{})
+        // ========================================================================
+        // COMPONENT MANAGEMENT
+        // ========================================================================
+
+        template <typename T, typename... Args>
+        T &addComponent(Entity e, Args &&...args)
         {
             auto &storage = getOrCreateStorage<T>();
-            storage.add(e, c);
-            return *storage.get(e);
-        }
-
-        template <typename T>
-        bool hasComponent(Entity e) const
-        {
-            auto it = components.find(std::type_index(typeid(T)));
-            if (it == components.end())
-                return false;
-            auto *storage = static_cast<ComponentStorage<T> *>(it->second.get());
-            return storage->has(e);
+            return storage.add(e, T{std::forward<Args>(args)...});
         }
 
         template <typename T>
         T *getComponent(Entity e)
         {
-            auto it = components.find(std::type_index(typeid(T)));
-            if (it == components.end())
+            if (!isAlive(e))
                 return nullptr;
-            auto *storage = static_cast<ComponentStorage<T> *>(it->second.get());
-            return storage->get(e);
+
+            auto it = storages.find(std::type_index(typeid(T)));
+            if (it == storages.end())
+                return nullptr;
+
+            return static_cast<ComponentStorage<T> *>(it->second.get())->get(e);
+        }
+
+        template <typename T>
+        const T *getComponent(Entity e) const
+        {
+            if (!isAlive(e))
+                return nullptr;
+
+            auto it = storages.find(std::type_index(typeid(T)));
+            if (it == storages.end())
+                return nullptr;
+
+            return static_cast<ComponentStorage<T> *>(it->second.get())->get(e);
+        }
+
+        template <typename T>
+        bool hasComponent(Entity e) const
+        {
+            if (!isAlive(e))
+                return false;
+
+            auto it = storages.find(std::type_index(typeid(T)));
+            if (it == storages.end())
+                return false;
+
+            return it->second->has(e);
+        }
+
+        template <typename T>
+        void removeComponent(Entity e)
+        {
+            auto it = storages.find(std::type_index(typeid(T)));
+            if (it != storages.end())
+                it->second->remove(e);
         }
 
         // ========================================================================
-        // VIEW
+        // QUERIES
         // ========================================================================
-        template <typename... Cs>
-        struct View
+
+        template <typename T, typename Func>
+        void forEach(Func &&func)
         {
-            Registry *reg;
-            std::tuple<ComponentStorage<Cs> *...> storages;
+            auto it = storages.find(std::type_index(typeid(T)));
+            if (it == storages.end())
+                return;
 
-            struct Iterator
+            auto *storage = static_cast<ComponentStorage<T> *>(it->second.get());
+            auto &components = storage->data();
+            auto &entities = storage->getEntities();
+
+            for (size_t i = 0; i < components.size(); ++i)
             {
-                Registry *reg;
-                std::tuple<ComponentStorage<Cs> *...> storages;
-                size_t index;
+                if (isAlive(entities[i]))
+                    func(entities[i], components[i]);
+            }
+        }
 
-                bool operator!=(const Iterator &other) const
+        template <typename T1, typename T2, typename Func>
+        void forEach(Func &&func)
+        {
+            auto it1 = storages.find(std::type_index(typeid(T1)));
+            auto it2 = storages.find(std::type_index(typeid(T2)));
+
+            if (it1 == storages.end() || it2 == storages.end())
+                return;
+
+            auto *storage1 = static_cast<ComponentStorage<T1> *>(it1->second.get());
+            auto *storage2 = static_cast<ComponentStorage<T2> *>(it2->second.get());
+
+            if (storage1->size() <= storage2->size())
+            {
+                auto &entities = storage1->getEntities();
+                auto &components1 = storage1->data();
+
+                for (size_t i = 0; i < components1.size(); ++i)
                 {
-                    return index != other.index;
-                }
-
-                void operator++()
-                {
-                    ++index;
-                    skipInvalid();
-                }
-
-                void skipInvalid()
-                {
-                    auto &first = *std::get<0>(storages);
-                    auto &ents = first.entities();
-
-                    while (index < ents.size())
+                    Entity e = entities[i];
+                    if (isAlive(e))
                     {
-                        Entity e{ents[index]};
-                        if (!reg->isAlive(e) || !allHas(e))
-                        {
-                            ++index;
-                            continue;
-                        }
-                        break;
+                        T2 *c2 = storage2->get(e);
+                        if (c2)
+                            func(e, components1[i], *c2);
                     }
                 }
-
-                template <size_t... I>
-                bool allHasImpl(Entity e, std::index_sequence<I...>)
-                {
-                    return (std::get<I>(storages)->has(e) && ...);
-                }
-
-                bool allHas(Entity e)
-                {
-                    return allHasImpl(e, std::index_sequence_for<Cs...>{});
-                }
-
-                auto operator*()
-                {
-                    Entity e{std::get<0>(storages)->entities()[index]};
-                    return std::tuple<Entity, Cs &...>{
-                        e,
-                        *std::get<ComponentStorage<Cs> *>(storages)->get(e)...};
-                }
-            };
-
-            Iterator begin()
-            {
-                Iterator it{reg, storages, 0};
-                it.skipInvalid();
-                return it;
             }
-
-            Iterator end()
+            else
             {
-                return Iterator{reg, storages, std::get<0>(storages)->entities().size()};
-            }
-        };
+                auto &entities = storage2->getEntities();
+                auto &components2 = storage2->data();
 
-        template <typename... Cs>
-        View<Cs...> view()
+                for (size_t i = 0; i < components2.size(); ++i)
+                {
+                    Entity e = entities[i];
+                    if (isAlive(e))
+                    {
+                        T1 *c1 = storage1->get(e);
+                        if (c1)
+                            func(e, *c1, components2[i]);
+                    }
+                }
+            }
+        }
+
+        template <typename T1, typename T2, typename T3, typename Func>
+        void forEach(Func &&func)
         {
-            return View<Cs...>{this, std::make_tuple(&getOrCreateStorage<Cs>()...)};
+            auto it1 = storages.find(std::type_index(typeid(T1)));
+            auto it2 = storages.find(std::type_index(typeid(T2)));
+            auto it3 = storages.find(std::type_index(typeid(T3)));
+
+            if (it1 == storages.end() || it2 == storages.end() || it3 == storages.end())
+                return;
+
+            auto *storage1 = static_cast<ComponentStorage<T1> *>(it1->second.get());
+            auto *storage2 = static_cast<ComponentStorage<T2> *>(it2->second.get());
+            auto *storage3 = static_cast<ComponentStorage<T3> *>(it3->second.get());
+
+            size_t minSize = storage1->size();
+            int minIdx = 1;
+
+            if (storage2->size() < minSize)
+            {
+                minSize = storage2->size();
+                minIdx = 2;
+            }
+            if (storage3->size() < minSize)
+            {
+                minSize = storage3->size();
+                minIdx = 3;
+            }
+
+            if (minIdx == 1)
+            {
+                auto &entities = storage1->getEntities();
+                auto &components1 = storage1->data();
+
+                for (size_t i = 0; i < components1.size(); ++i)
+                {
+                    Entity e = entities[i];
+                    if (isAlive(e))
+                    {
+                        T2 *c2 = storage2->get(e);
+                        T3 *c3 = storage3->get(e);
+                        if (c2 && c3)
+                            func(e, components1[i], *c2, *c3);
+                    }
+                }
+            }
+            else if (minIdx == 2)
+            {
+                auto &entities = storage2->getEntities();
+                auto &components2 = storage2->data();
+
+                for (size_t i = 0; i < components2.size(); ++i)
+                {
+                    Entity e = entities[i];
+                    if (isAlive(e))
+                    {
+                        T1 *c1 = storage1->get(e);
+                        T3 *c3 = storage3->get(e);
+                        if (c1 && c3)
+                            func(e, *c1, components2[i], *c3);
+                    }
+                }
+            }
+            else
+            {
+                auto &entities = storage3->getEntities();
+                auto &components3 = storage3->data();
+
+                for (size_t i = 0; i < components3.size(); ++i)
+                {
+                    Entity e = entities[i];
+                    if (isAlive(e))
+                    {
+                        T1 *c1 = storage1->get(e);
+                        T2 *c2 = storage2->get(e);
+                        if (c1 && c2)
+                            func(e, *c1, *c2, components3[i]);
+                    }
+                }
+            }
+        }
+
+        // ========================================================================
+        // UTILITIES
+        // ========================================================================
+
+        size_t entityCount() const
+        {
+            return generations.size() - freeIndices.size();
+        }
+
+        template <typename T>
+        size_t componentCount() const
+        {
+            auto it = storages.find(std::type_index(typeid(T)));
+            if (it == storages.end())
+                return 0;
+            return it->second->size();
         }
 
     private:
@@ -288,18 +424,20 @@ namespace ecs
         ComponentStorage<T> &getOrCreateStorage()
         {
             auto type = std::type_index(typeid(T));
-            auto it = components.find(type);
-            if (it == components.end())
+            auto it = storages.find(type);
+
+            if (it == storages.end())
             {
                 auto storage = std::make_unique<ComponentStorage<T>>();
                 auto *ptr = storage.get();
-                components[type] = std::move(storage);
+                storages[type] = std::move(storage);
                 return *ptr;
             }
+
             return *static_cast<ComponentStorage<T> *>(it->second.get());
         }
 
-        std::unordered_map<std::type_index, std::unique_ptr<IComponentStorage>> components;
+        std::unordered_map<std::type_index, std::unique_ptr<IComponentStorage>> storages;
         std::vector<uint8_t> generations;
         std::vector<uint32_t> freeIndices;
     };

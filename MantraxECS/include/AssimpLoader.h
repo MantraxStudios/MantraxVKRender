@@ -21,11 +21,11 @@ namespace Mantrax
         {
             bool triangulate = true;
             bool genNormals = true;
-            bool flipUVs = true; // ❌ CAMBIADO: false por defecto (OpenGL ya lo hace)
+            bool flipUVs = true;
             bool calcTangents = true;
             bool preTransform = true;
             bool globalScale = true;
-            bool genSmoothNormals = false; // ✅ NUEVO: opción para normales suaves
+            bool genSmoothNormals = false;
 
             unsigned int GetFlags() const
             {

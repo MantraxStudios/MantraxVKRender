@@ -82,6 +82,28 @@ build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxEC
   TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
   TARGET_PDB = Mantrax.pdb
 
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/Scene.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/Scene.cpp || cmake_object_order_depends_target_MantraxApp
+  CONFIG = Debug
+  DEFINES = -DMANTRAXAPP_EXPORTS -DMANTRAX_EXPORTS -DMantraxApp_EXPORTS
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src\Scene.cpp.obj.d
+  FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxRender/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxAddons/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/include/lua
+  OBJECT_DIR = CMakeFiles\MantraxApp.dir
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src
+  TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
+  TARGET_PDB = Mantrax.pdb
+
+build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SceneManager.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SceneManager.cpp || cmake_object_order_depends_target_MantraxApp
+  CONFIG = Debug
+  DEFINES = -DMANTRAXAPP_EXPORTS -DMANTRAX_EXPORTS -DMantraxApp_EXPORTS
+  DEP_FILE = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src\SceneManager.cpp.obj.d
+  FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxRender/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxAddons/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/include/lua
+  OBJECT_DIR = CMakeFiles\MantraxApp.dir
+  OBJECT_FILE_DIR = CMakeFiles\MantraxApp.dir\C_\Users\tupap\Desktop\MantraxVKRender\MantraxECS\src
+  TARGET_COMPILE_PDB = CMakeFiles\MantraxApp.dir\
+  TARGET_PDB = Mantrax.pdb
+
 build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SceneRenderer.cpp.obj: CXX_COMPILER__MantraxApp_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SceneRenderer.cpp || cmake_object_order_depends_target_MantraxApp
   CONFIG = Debug
   DEFINES = -DMANTRAXAPP_EXPORTS -DMANTRAX_EXPORTS -DMantraxApp_EXPORTS
@@ -167,7 +189,7 @@ build CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxRe
 #############################################
 # Link the shared library Mantrax.dll
 
-build Mantrax.dll Mantrax.lib: CXX_SHARED_LIBRARY_LINKER__MantraxApp_Debug CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/InputSystem.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/LuaScript.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/ModelManager.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SceneRenderer.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/ServiceLocator.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SkyBox.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/stb_image_impl.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxRender/src/MainWinPlug.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxRender/src/MantraxGFX_API.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxRender/src/MantraxGFX_Timer.cpp.obj | C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxAddons/libs/assimp-vc143-mt.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/libs/lua-5.4.4.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/libs/lua54.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxRender/libs/vulkan-1.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxRender/libs/vulkan-1.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxAddons/libs/assimp-vc143-mt.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/libs/lua-5.4.4.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/libs/lua54.lib
+build Mantrax.dll Mantrax.lib: CXX_SHARED_LIBRARY_LINKER__MantraxApp_Debug CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/InputSystem.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/LuaScript.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/ModelManager.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/Scene.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SceneManager.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SceneRenderer.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/ServiceLocator.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/SkyBox.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxECS/src/stb_image_impl.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxRender/src/MainWinPlug.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxRender/src/MantraxGFX_API.cpp.obj CMakeFiles/MantraxApp.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxRender/src/MantraxGFX_Timer.cpp.obj | C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxAddons/libs/assimp-vc143-mt.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/libs/lua-5.4.4.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/libs/lua54.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxRender/libs/vulkan-1.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxRender/libs/vulkan-1.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxAddons/libs/assimp-vc143-mt.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/libs/lua-5.4.4.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxWrapper/../MantraxECS/libs/lua54.lib
   CONFIG = Debug
   LANGUAGE_COMPILE_FLAGS = -O0 -g -Xclang -gcodeview -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
   LINK_FLAGS = -shared -fuse-ld=lld-link
