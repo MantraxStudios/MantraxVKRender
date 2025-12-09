@@ -10,6 +10,7 @@
 #include "../../MantraxECS/include/SceneManager.h"
 #include "../../MantraxECS/include/Scene.h"
 #include "../../MantraxECS/include/LuaScript.h"
+#include "../../MantraxECS/include/MaterialManager.h"
 #include "../includes/Components.h"
 #include "../includes/LuaEditor.h"
 #include "../includes/FPSCamera.h"
@@ -145,7 +146,7 @@ glm::vec3 TileToWorld(int tileX, int tileY, float tileSize = 1.0f)
 }
 
 // ============================================================================
-// FUNCIÓN PARA CREAR LA ESCENA INICIAL
+// FUNCIÓN PARA CREAR LA ESCENA INICIAL CON MATERIALMANAGER
 // ============================================================================
 void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRenderer *sceneRenderer)
 {
@@ -155,20 +156,42 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
         throw std::runtime_error("No active scene!");
     }
 
+    std::cout << "\n🎨 Initializing MaterialManager...\n";
+
+    // ========================================================================
+    // CREAR MATERIALMANAGER
+    // ========================================================================
+    ServiceLocator::instance().registerService("MaterialManager",
+                                               std::make_shared<Mantrax::MaterialManager>(loader->gfx.get()));
+    auto materialManager = ServiceLocator::instance().get<Mantrax::MaterialManager>("MaterialManager");
+
+    std::cout << "✅ MaterialManager initialized!\n";
     std::cout << "\n🚀 Loading PBR textures...\n";
 
-    // Cargar texturas
-    auto colorTextureData = Mantrax::TextureLoader::LoadFromFile("Ground A2_E.png");
-    auto colorTexture = loader->gfx->CreateTexture(
-        colorTextureData->pixels,
-        colorTextureData->width,
-        colorTextureData->height);
+    // ========================================================================
+    // CREAR MATERIAL DEL SUELO CON MATERIALMANAGER
+    // ========================================================================
+    Mantrax::MaterialProperties groundProps;
+    groundProps.baseColor = glm::vec3(1.0f);
+    groundProps.metallicFactor = 0.1f;
+    groundProps.roughnessFactor = 0.8f;
+    groundProps.normalScale = 1.0f;
+
+    auto groundMaterial = materialManager->CreatePBRMaterialFromFiles(
+        "GroundMaterial",
+        loader->normalShader,
+        "Ground A2_E.png", // Albedo
+        "",                // Normal (vacío si no existe)
+        "",                // Metallic (vacío si no existe)
+        "",                // Roughness (vacío si no existe)
+        "",                // AO (vacío si no existe)
+        groundProps);
 
     std::cout << "✅ PBR textures loaded successfully!\n";
     std::cout << "\n🚀 Creating isometric ground plane...\n";
 
     // ========================================================================
-    // CREAR GROUND PLANE CON EL NUEVO SISTEMA
+    // CREAR GROUND PLANE CON EL MATERIAL
     // ========================================================================
     auto groundPlane = modelManager->CreateModelOnly("Plane.fbx", "GroundPlane");
 
@@ -177,19 +200,7 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
         throw std::runtime_error("Failed to create ground plane");
     }
 
-    auto groundMaterial = loader->gfx->CreateMaterial(loader->normalShader);
-    groundMaterial->SetMetallicFactor(0.1f);
-    groundMaterial->SetRoughnessFactor(0.8f);
-    groundMaterial->SetNormalScale(1.0f);
-
-    loader->gfx->SetMaterialPBRTextures(
-        groundMaterial,
-        colorTexture,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr);
-
+    // Asignar material del MaterialManager
     groundPlane->material = groundMaterial;
     groundPlane->renderObj.material = groundMaterial;
 
@@ -208,6 +219,38 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
     groundRender.renderObject = groundPlane;
 
     std::cout << "✅ Isometric ground plane created!\n";
+
+    // ========================================================================
+    // CREAR MATERIALES ADICIONALES DE EJEMPLO
+    // ========================================================================
+
+    // Material metálico dorado
+    auto goldMaterial = materialManager->CreateSolidColorMaterial(
+        "Gold",
+        loader->normalShader,
+        glm::vec3(1.0f, 0.84f, 0.0f),
+        0.95f, // Muy metálico
+        0.2f   // Poco rugoso
+    );
+
+    // Material de plástico rojo
+    auto redPlasticMaterial = materialManager->CreateSolidColorMaterial(
+        "RedPlastic",
+        loader->normalShader,
+        glm::vec3(0.8f, 0.1f, 0.1f),
+        0.0f, // No metálico
+        0.6f  // Algo rugoso
+    );
+
+    // Material de plástico verde
+    auto greenPlasticMaterial = materialManager->CreateSolidColorMaterial(
+        "GreenPlastic",
+        loader->normalShader,
+        glm::vec3(0.1f, 0.8f, 0.1f),
+        0.0f,
+        0.5f);
+
+    std::cout << "✅ Additional materials created!\n";
 
     // ========================================================================
     // SKYBOX
@@ -251,7 +294,17 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
     skyboxRender.renderObject = skyboxObj;
     sceneRenderer->AddObject(skyboxObj);
 
-    std::cout << "✅ Scene setup complete!\n";
+    // ========================================================================
+    // LISTAR TODOS LOS MATERIALES CREADOS
+    // ========================================================================
+    auto allMaterials = materialManager->GetAllMaterialNames();
+    std::cout << "\n📋 Materials loaded (" << allMaterials.size() << "):\n";
+    for (const auto &matName : allMaterials)
+    {
+        std::cout << "  - " << matName << "\n";
+    }
+
+    std::cout << "\n✅ Scene setup complete!\n";
 }
 
 #ifdef _WIN32
@@ -300,8 +353,11 @@ int main()
 
         std::cout << "✅ Scene created: " << activeScene->GetName() << "\n";
 
-        // Setup de la escena
+        // Setup de la escena (incluye MaterialManager)
         SetupGameScene(loader.get(), &modelManager, sceneRenderer.get());
+
+        // Obtener MaterialManager para uso posterior
+        auto materialManager = ServiceLocator::instance().get<Mantrax::MaterialManager>("MaterialManager");
 
         // ====================================================================
         // CONFIGURAR CÁMARA
@@ -335,6 +391,7 @@ int main()
         std::cout << "Shift - Fast pan\n";
         std::cout << "Mouse Wheel - Zoom in/out\n";
         std::cout << "P - Toggle Perspective/Orthographic\n";
+        std::cout << "M - Print material info\n";
         std::cout << "ESC - Exit\n";
         std::cout << "============================\n\n";
 
@@ -383,6 +440,23 @@ int main()
                 std::cout << "Projection: "
                           << (camera.IsPerspective() ? "Perspective" : "Orthographic")
                           << "\n";
+            }
+
+            // Tecla M para imprimir información de materiales
+            if (g_InputSystem->IsKeyPressed(Mantrax::KeyCode::M))
+            {
+                std::cout << "\n📋 Material Information:\n";
+                auto allMats = materialManager->GetAllMaterialNames();
+                for (const auto &matName : allMats)
+                {
+                    auto props = materialManager->GetMaterialProperties(matName);
+                    std::cout << "  🎨 " << matName << ":\n";
+                    std::cout << "    Color: (" << props.baseColor.r << ", "
+                              << props.baseColor.g << ", " << props.baseColor.b << ")\n";
+                    std::cout << "    Metallic: " << props.metallicFactor << "\n";
+                    std::cout << "    Roughness: " << props.roughnessFactor << "\n";
+                }
+                std::cout << "\n";
             }
 
             // ================================================================
