@@ -3,6 +3,8 @@ Requirements
 This project requires Ninja and CMake (version 3.13 or higher) for building.
 The rendering environment is based on Vulkan, ensuring high-performance, low-level graphics control.
 
+<img width="1916" height="1031" alt="image" src="https://github.com/user-attachments/assets/04c465d3-c9ee-4ad4-8cb4-f63a9b7cc468" />
+
 <img width="1916" height="1025" alt="image" src="https://github.com/user-attachments/assets/3f70a84d-814c-43df-8867-e958d42f195a" />
 
 <img width="1913" height="1027" alt="image" src="https://github.com/user-attachments/assets/0d34431a-3394-4554-82a6-6a0ec4e2efad" />
