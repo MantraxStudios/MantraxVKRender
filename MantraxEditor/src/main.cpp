@@ -527,6 +527,7 @@ int main()
             // UI RENDER
             // ================================================================
             imgui.BeginFrame();
+
             luae.Render();
             uiRender->RenderAll();
             ImGui::Render();

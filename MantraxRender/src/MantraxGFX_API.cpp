@@ -51,7 +51,7 @@ namespace Mantrax
         Cleanup();
     }
 
-    std::shared_ptr<Texture> GFX::CreateTexture(unsigned char *data, int width, int height)
+    std::shared_ptr<Texture> GFX::CreateTexture(unsigned char *data, int width, int height, VkFilter TextureFilter)
     {
         auto texture = std::make_shared<Texture>();
         texture->width = width;
@@ -104,16 +104,16 @@ namespace Mantrax
         if (width <= 16 || height <= 16)
         {
             // Texturas muy pequeñas o pixel art
-            samplerInfo.magFilter = VK_FILTER_NEAREST;
-            samplerInfo.minFilter = VK_FILTER_NEAREST;
-            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+            samplerInfo.magFilter = TextureFilter;
+            samplerInfo.minFilter = TextureFilter;
+            samplerInfo.mipmapMode = TextureFilter == VK_FILTER_NEAREST ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
         }
         else
         {
             // Texturas normales
-            samplerInfo.magFilter = VK_FILTER_NEAREST;
-            samplerInfo.minFilter = VK_FILTER_NEAREST;
-            samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+            samplerInfo.magFilter = TextureFilter;
+            samplerInfo.minFilter = TextureFilter;
+            samplerInfo.mipmapMode = TextureFilter == VK_FILTER_NEAREST ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
         }
 
         // ✅ CLAMP_TO_EDGE evita que se repita la textura

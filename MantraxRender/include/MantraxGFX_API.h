@@ -320,7 +320,7 @@ namespace Mantrax
 
         GFX(HINSTANCE hInstance, HWND hWnd, const Config &config = Config{});
         ~GFX();
-        std::shared_ptr<Texture> CreateTexture(unsigned char *data, int width, int height);
+        std::shared_ptr<Texture> CreateTexture(unsigned char *data, int width, int height, VkFilter TextureFilter = VK_FILTER_LINEAR);
         void SetMaterialTexture(std::shared_ptr<Material> material, std::shared_ptr<Texture> texture);
 
         std::shared_ptr<OffscreenFramebuffer> CreateOffscreenFramebuffer(uint32_t width, uint32_t height);
