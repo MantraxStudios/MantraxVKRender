@@ -52,7 +52,6 @@ void SceneRenderer::UpdateObjectTransform(
 void SceneRenderer::UpdateUBOs(Mantrax::FPSCamera *camera)
 {
     glm::vec3 camPos = camera->GetPosition();
-
     glm::mat4 view = camera->GetViewMatrix();
     glm::mat4 proj = camera->GetProjectionMatrix();
 
@@ -71,7 +70,7 @@ void SceneRenderer::UpdateUBOs(Mantrax::FPSCamera *camera)
         obj->ubo.cameraPosition[2] = camPos.z;
         obj->ubo.cameraPosition[3] = 0.0f;
 
-        m_gfx->UpdateMaterialUBO(obj->material.get(), obj->ubo);
+        m_gfx->UpdateRenderObjectUBO(&obj->renderObj, obj->ubo);
     }
 }
 

@@ -156,7 +156,37 @@ namespace Mantrax
     {
         // Ahora asigna a albedo para compatibilidad
         material->SetAlbedoTexture(texture);
-        UpdatePBRDescriptorSet(material);
+
+        // UpdatePBRDescriptorSet(material);
+    }
+
+    void GFX::UpdateRenderObjectUBO(RenderObject *obj, const UniformBufferObject &ubo)
+    {
+        if (!obj || !obj->mesh || obj->mesh->uniformBuffer == VK_NULL_HANDLE)
+        {
+            throw std::runtime_error("RenderObject o mesh no válido para actualizar UBO");
+        }
+
+        UpdateMeshUBO(obj->mesh.get(), ubo);
+    }
+
+    void GFX::AddRenderObjectSafe(const RenderObject &obj)
+    {
+        vkDeviceWaitIdle(m_Device);
+
+        if (!obj.mesh || !obj.material)
+        {
+            throw std::runtime_error("RenderObject debe tener mesh y material válidos");
+        }
+
+        // Si el mesh no tiene descriptor set, crearlo
+        if (obj.mesh->descriptorSet == VK_NULL_HANDLE)
+        {
+            CreateMeshDescriptorSet(obj.mesh, obj.material);
+        }
+
+        m_RenderObjects.push_back(obj);
+        m_NeedCommandBufferRebuild = true;
     }
 
     std::shared_ptr<OffscreenFramebuffer> GFX::CreateOffscreenFramebuffer(uint32_t width, uint32_t height)
@@ -424,188 +454,6 @@ namespace Mantrax
         EndSingleTimeCommands(cmd);
     }
 
-    void GFX::RenderToOffscreenFramebuffer(std::shared_ptr<OffscreenFramebuffer> offscreen,
-                                           const std::vector<RenderObject> &objects)
-    {
-        VkCommandBuffer cmd = BeginSingleTimeCommands();
-
-        // Transición: SHADER_READ_ONLY → COLOR_ATTACHMENT
-        VkImageMemoryBarrier barrier1{};
-        barrier1.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier1.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier1.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        barrier1.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier1.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier1.image = offscreen->colorImage;
-        barrier1.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier1.subresourceRange.baseMipLevel = 0;
-        barrier1.subresourceRange.levelCount = 1;
-        barrier1.subresourceRange.baseArrayLayer = 0;
-        barrier1.subresourceRange.layerCount = 1;
-        barrier1.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        barrier1.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-        vkCmdPipelineBarrier(
-            cmd,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &barrier1);
-
-        // Comenzar render pass
-        std::array<VkClearValue, 2> clearValues{};
-        clearValues[0].color = m_Config.clearColor;
-        clearValues[1].depthStencil = {1.0f, 0};
-
-        VkRenderPassBeginInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = offscreen->renderPass;
-        renderPassInfo.framebuffer = offscreen->framebuffer;
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = offscreen->extent;
-        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-        renderPassInfo.pClearValues = clearValues.data();
-
-        vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-        // ✅ ESTABLECER VIEWPORT Y SCISSOR
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(offscreen->extent.width);
-        viewport.height = static_cast<float>(offscreen->extent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-        VkRect2D scissor{};
-        scissor.offset = {0, 0};
-        scissor.extent = offscreen->extent;
-        vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-        // Track último pipeline
-        VkPipeline lastPipeline = VK_NULL_HANDLE;
-
-        // Renderizar objetos OPACOS primero
-        for (const auto &obj : objects)
-        {
-            if (!obj.mesh || !obj.material || !obj.material->shader)
-                continue;
-
-            if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
-                continue;
-
-            if (!obj.material->shader->pipeline)
-                continue;
-
-            // Saltar transparentes
-            if (obj.material->shader->config.blendEnable)
-                continue;
-
-            if (obj.material->shader->pipeline != lastPipeline)
-            {
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  obj.material->shader->pipeline);
-                lastPipeline = obj.material->shader->pipeline;
-            }
-
-            vkCmdPushConstants(
-                cmd,
-                obj.material->shader->pipelineLayout,
-                VK_SHADER_STAGE_FRAGMENT_BIT,
-                0,
-                sizeof(MaterialPushConstants),
-                &obj.material->pushConstants);
-
-            VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-            vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    obj.material->shader->pipelineLayout,
-                                    0, 1, &obj.material->descriptorSet, 0, nullptr);
-
-            vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()),
-                             1, 0, 0, 0);
-        }
-
-        // Renderizar objetos TRANSPARENTES
-        for (const auto &obj : objects)
-        {
-            if (!obj.mesh || !obj.material || !obj.material->shader)
-                continue;
-
-            if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
-                continue;
-
-            if (!obj.material->shader->pipeline)
-                continue;
-
-            // Solo transparentes
-            if (!obj.material->shader->config.blendEnable)
-                continue;
-
-            if (obj.material->shader->pipeline != lastPipeline)
-            {
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  obj.material->shader->pipeline);
-                lastPipeline = obj.material->shader->pipeline;
-            }
-
-            vkCmdPushConstants(
-                cmd,
-                obj.material->shader->pipelineLayout,
-                VK_SHADER_STAGE_FRAGMENT_BIT,
-                0,
-                sizeof(MaterialPushConstants),
-                &obj.material->pushConstants);
-
-            VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-            vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    obj.material->shader->pipelineLayout,
-                                    0, 1, &obj.material->descriptorSet, 0, nullptr);
-
-            vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()),
-                             1, 0, 0, 0);
-        }
-
-        vkCmdEndRenderPass(cmd);
-
-        // Transición: COLOR_ATTACHMENT → SHADER_READ_ONLY
-        VkImageMemoryBarrier barrier2{};
-        barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier2.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        barrier2.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier2.image = offscreen->colorImage;
-        barrier2.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier2.subresourceRange.baseMipLevel = 0;
-        barrier2.subresourceRange.levelCount = 1;
-        barrier2.subresourceRange.baseArrayLayer = 0;
-        barrier2.subresourceRange.layerCount = 1;
-        barrier2.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        barrier2.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-        vkCmdPipelineBarrier(
-            cmd,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &barrier2);
-
-        EndSingleTimeCommands(cmd);
-    }
-
     std::shared_ptr<Texture> GFX::CreateDefaultWhiteTexture()
     {
         unsigned char whitePixel[4] = {255, 255, 255, 255};
@@ -617,87 +465,6 @@ namespace Mantrax
     {
         unsigned char normalPixel[4] = {128, 128, 255, 255}; // Normal (0, 0, 1) en tangent space
         return CreateTexture(normalPixel, 1, 1);
-    }
-
-    // Actualizar descriptor set con todas las texturas PBR
-    void GFX::UpdatePBRDescriptorSet(std::shared_ptr<Material> material)
-    {
-        // Crear texturas por defecto si no existen
-        static std::shared_ptr<Texture> defaultWhite = nullptr;
-        static std::shared_ptr<Texture> defaultNormal = nullptr;
-
-        if (!defaultWhite)
-            defaultWhite = CreateDefaultWhiteTexture();
-        if (!defaultNormal)
-            defaultNormal = CreateDefaultNormalTexture();
-
-        // Usar texturas por defecto si no están asignadas
-        auto albedoTex = material->pbrTextures.albedo ? material->pbrTextures.albedo : defaultWhite;
-        auto normalTex = material->pbrTextures.normal ? material->pbrTextures.normal : defaultNormal;
-        auto metallicTex = material->pbrTextures.metallic ? material->pbrTextures.metallic : defaultWhite;
-        auto roughnessTex = material->pbrTextures.roughness ? material->pbrTextures.roughness : defaultWhite;
-        auto aoTex = material->pbrTextures.ao ? material->pbrTextures.ao : defaultWhite;
-
-        // Buffer info para UBO
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = material->uniformBuffer;
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(UniformBufferObject);
-
-        // Image infos para las 5 texturas
-        std::array<VkDescriptorImageInfo, 5> imageInfos{};
-
-        // Albedo
-        imageInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfos[0].imageView = albedoTex->imageView;
-        imageInfos[0].sampler = albedoTex->sampler;
-
-        // Normal
-        imageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfos[1].imageView = normalTex->imageView;
-        imageInfos[1].sampler = normalTex->sampler;
-
-        // Metallic
-        imageInfos[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfos[2].imageView = metallicTex->imageView;
-        imageInfos[2].sampler = metallicTex->sampler;
-
-        // Roughness
-        imageInfos[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfos[3].imageView = roughnessTex->imageView;
-        imageInfos[3].sampler = roughnessTex->sampler;
-
-        // AO
-        imageInfos[4].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfos[4].imageView = aoTex->imageView;
-        imageInfos[4].sampler = aoTex->sampler;
-
-        // Crear writes para descriptor set
-        std::array<VkWriteDescriptorSet, 6> writes{};
-
-        // Write 0: UBO
-        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[0].dstSet = material->descriptorSet;
-        writes[0].dstBinding = 0;
-        writes[0].dstArrayElement = 0;
-        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writes[0].descriptorCount = 1;
-        writes[0].pBufferInfo = &bufferInfo;
-
-        // Write 1-5: Texturas PBR
-        for (int i = 0; i < 5; i++)
-        {
-            writes[i + 1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[i + 1].dstSet = material->descriptorSet;
-            writes[i + 1].dstBinding = i + 1;
-            writes[i + 1].dstArrayElement = 0;
-            writes[i + 1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writes[i + 1].descriptorCount = 1;
-            writes[i + 1].pImageInfo = &imageInfos[i];
-        }
-
-        vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(writes.size()),
-                               writes.data(), 0, nullptr);
     }
 
     // Función pública para asignar texturas PBR a un material
@@ -762,14 +529,14 @@ namespace Mantrax
         auto mesh = std::make_shared<Mesh>(vertices, indices);
         CreateVertexBuffer(mesh);
         CreateIndexBuffer(mesh);
+        CreateUniformBuffer(mesh);
         return mesh;
     }
 
     std::shared_ptr<Material> GFX::CreateMaterial(std::shared_ptr<Shader> shader)
     {
         auto material = std::make_shared<Material>(shader);
-        CreateUniformBuffer(material);
-        CreateDescriptorSet(material);
+        // Ya no crea uniform buffer ni descriptor set
         return material;
     }
 
@@ -976,13 +743,13 @@ namespace Mantrax
             vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
             vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
+            // ✅ CAMBIAR ESTO:
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     obj.material->shader->pipelineLayout,
-                                    0, 1, &obj.material->descriptorSet, 0, nullptr);
+                                    0, 1, &obj.mesh->descriptorSet, 0, nullptr);
 
             vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()), 1, 0, 0, 0);
         }
-
         // Comandos adicionales (ej: ImGui)
         if (additionalCommands)
         {
@@ -1040,17 +807,33 @@ namespace Mantrax
 
     void GFX::AddRenderObject(const RenderObject &obj)
     {
+        if (!obj.mesh || !obj.material)
+        {
+            throw std::runtime_error("RenderObject debe tener mesh y material válidos");
+        }
+
+        // Si el mesh no tiene descriptor set, crearlo
+        if (obj.mesh->descriptorSet == VK_NULL_HANDLE)
+        {
+            CreateMeshDescriptorSet(obj.mesh, obj.material);
+        }
+
         m_RenderObjects.push_back(obj);
         m_NeedCommandBufferRebuild = true;
     }
 
-    void GFX::UpdateMaterialUBO(Material *material, const UniformBufferObject &ubo)
+    void GFX::UpdateMeshUBO(Mesh *mesh, const UniformBufferObject &ubo)
     {
-        material->ubo = ubo;
+        if (!mesh || mesh->uniformBuffer == VK_NULL_HANDLE)
+        {
+            throw std::runtime_error("Mesh no tiene uniform buffer válido");
+        }
+
+        mesh->ubo = ubo;
         void *data;
-        vkMapMemory(m_Device, material->uniformBufferMemory, 0, sizeof(UniformBufferObject), 0, &data);
+        vkMapMemory(m_Device, mesh->uniformBufferMemory, 0, sizeof(UniformBufferObject), 0, &data);
         memcpy(data, &ubo, sizeof(UniformBufferObject));
-        vkUnmapMemory(m_Device, material->uniformBufferMemory);
+        vkUnmapMemory(m_Device, mesh->uniformBufferMemory);
     }
 
     void GFX::ClearRenderObjects()
@@ -1162,13 +945,6 @@ namespace Mantrax
         m_NeedCommandBufferRebuild = true;
     }
 
-    void GFX::AddRenderObjectSafe(const RenderObject &obj)
-    {
-        vkDeviceWaitIdle(m_Device);
-        m_RenderObjects.push_back(obj);
-        m_NeedCommandBufferRebuild = true;
-    }
-
     std::vector<RenderObject> GFX::GetRenderObjects() const
     {
         return m_RenderObjects;
@@ -1204,10 +980,10 @@ namespace Mantrax
         EndSingleTimeCommands(cmd);
     }
 
-    void GFX::UpdateDescriptorSetWithTexture(std::shared_ptr<Material> material)
-    {
-        UpdatePBRDescriptorSet(material);
-    }
+    // void GFX::UpdateDescriptorSetWithTexture(std::shared_ptr<Material> material)
+    // {
+    //     UpdatePBRDescriptorSet(material);
+    // }
 
     std::vector<char> GFX::ReadFile(const std::string &filename)
     {
@@ -2334,200 +2110,103 @@ namespace Mantrax
         vkFreeMemory(m_Device, stagingMem, nullptr);
     }
 
-    void GFX::CreateUniformBuffer(std::shared_ptr<Material> material)
+    void GFX::CreateUniformBuffer(std::shared_ptr<Mesh> mesh)
     {
         VkDeviceSize size = sizeof(UniformBufferObject);
 
         CreateBuffer(size,
                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                     material->uniformBuffer, material->uniformBufferMemory);
+                     mesh->uniformBuffer, mesh->uniformBufferMemory);
     }
 
-    void GFX::CreateDescriptorSet(std::shared_ptr<Material> material)
+    void GFX::CreateMeshDescriptorSet(std::shared_ptr<Mesh> mesh, std::shared_ptr<Material> material)
     {
+        if (!material || !material->shader)
+        {
+            throw std::runtime_error("Material y shader deben ser válidos");
+        }
+
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = m_DescriptorPool;
         allocInfo.descriptorSetCount = 1;
         allocInfo.pSetLayouts = &material->shader->descriptorSetLayout;
 
-        if (vkAllocateDescriptorSets(m_Device, &allocInfo, &material->descriptorSet) != VK_SUCCESS)
-            throw std::runtime_error("Error creando descriptor set");
+        if (vkAllocateDescriptorSets(m_Device, &allocInfo, &mesh->descriptorSet) != VK_SUCCESS)
+            throw std::runtime_error("Error creando descriptor set para mesh");
 
-        // SOLO actualizar el UBO por ahora
-        // La textura se actualizará cuando se llame a SetMaterialTexture
+        // Actualizar descriptor set con UBO del mesh
         VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = material->uniformBuffer;
+        bufferInfo.buffer = mesh->uniformBuffer;
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(UniformBufferObject);
 
-        VkWriteDescriptorSet descriptorWrite{};
-        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = material->descriptorSet;
-        descriptorWrite.dstBinding = 0;
-        descriptorWrite.dstArrayElement = 0;
-        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pBufferInfo = &bufferInfo;
+        // Texturas por defecto
+        static std::shared_ptr<Texture> defaultWhite = nullptr;
+        static std::shared_ptr<Texture> defaultNormal = nullptr;
 
-        vkUpdateDescriptorSets(m_Device, 1, &descriptorWrite, 0, nullptr);
-    }
+        if (!defaultWhite)
+            defaultWhite = CreateDefaultWhiteTexture();
+        if (!defaultNormal)
+            defaultNormal = CreateDefaultNormalTexture();
 
-    void GFX::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t index,
-                                  std::function<void(VkCommandBuffer)> imguiRenderCallback)
-    {
-        if (cmd == VK_NULL_HANDLE || index >= m_SwapchainFramebuffers.size())
+        // Usar texturas del material o defaults
+        auto albedoTex = material->pbrTextures.albedo ? material->pbrTextures.albedo : defaultWhite;
+        auto normalTex = material->pbrTextures.normal ? material->pbrTextures.normal : defaultNormal;
+        auto metallicTex = material->pbrTextures.metallic ? material->pbrTextures.metallic : defaultWhite;
+        auto roughnessTex = material->pbrTextures.roughness ? material->pbrTextures.roughness : defaultWhite;
+        auto aoTex = material->pbrTextures.ao ? material->pbrTextures.ao : defaultWhite;
+
+        // Image infos
+        std::array<VkDescriptorImageInfo, 5> imageInfos{};
+
+        imageInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[0].imageView = albedoTex->imageView;
+        imageInfos[0].sampler = albedoTex->sampler;
+
+        imageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[1].imageView = normalTex->imageView;
+        imageInfos[1].sampler = normalTex->sampler;
+
+        imageInfos[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[2].imageView = metallicTex->imageView;
+        imageInfos[2].sampler = metallicTex->sampler;
+
+        imageInfos[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[3].imageView = roughnessTex->imageView;
+        imageInfos[3].sampler = roughnessTex->sampler;
+
+        imageInfos[4].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[4].imageView = aoTex->imageView;
+        imageInfos[4].sampler = aoTex->sampler;
+
+        // Writes
+        std::array<VkWriteDescriptorSet, 6> writes{};
+
+        // Write 0: UBO del mesh
+        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[0].dstSet = mesh->descriptorSet;
+        writes[0].dstBinding = 0;
+        writes[0].dstArrayElement = 0;
+        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        writes[0].descriptorCount = 1;
+        writes[0].pBufferInfo = &bufferInfo;
+
+        // Writes 1-5: Texturas del material
+        for (int i = 0; i < 5; i++)
         {
-            throw std::runtime_error("Command buffer o índice inválido");
+            writes[i + 1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[i + 1].dstSet = mesh->descriptorSet;
+            writes[i + 1].dstBinding = i + 1;
+            writes[i + 1].dstArrayElement = 0;
+            writes[i + 1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[i + 1].descriptorCount = 1;
+            writes[i + 1].pImageInfo = &imageInfos[i];
         }
 
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-        if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
-            throw std::runtime_error("Error comenzando command buffer");
-
-        std::array<VkClearValue, 2> clearValues{};
-        clearValues[0].color = m_Config.clearColor;
-        clearValues[1].depthStencil = {1.0f, 0};
-
-        VkRenderPassBeginInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = m_RenderPass;
-        renderPassInfo.framebuffer = m_SwapchainFramebuffers[index];
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = m_SwapchainExtent;
-        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-        renderPassInfo.pClearValues = clearValues.data();
-
-        vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-        // ✅ CRÍTICO: Establecer viewport y scissor dinámicos AL INICIO
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(m_SwapchainExtent.width);
-        viewport.height = static_cast<float>(m_SwapchainExtent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-        VkRect2D scissor{};
-        scissor.offset = {0, 0};
-        scissor.extent = m_SwapchainExtent;
-        vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-        // Variable para trackear el último pipeline bindeado
-        VkPipeline lastPipeline = VK_NULL_HANDLE;
-        VkPipelineLayout lastLayout = VK_NULL_HANDLE;
-
-        // ✅ PASO 1: Renderizar objetos OPACOS primero
-        for (const auto &obj : m_RenderObjects)
-        {
-            if (!obj.mesh || !obj.material || !obj.material->shader)
-                continue;
-
-            if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
-                continue;
-
-            if (!obj.material->shader->pipeline)
-                continue;
-
-            // Saltar objetos transparentes en este pase
-            if (obj.material->shader->config.blendEnable)
-                continue;
-
-            if (obj.material->shader->pipeline != lastPipeline)
-            {
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  obj.material->shader->pipeline);
-                lastPipeline = obj.material->shader->pipeline;
-                lastLayout = obj.material->shader->pipelineLayout;
-            }
-
-            vkCmdPushConstants(
-                cmd,
-                obj.material->shader->pipelineLayout,
-                VK_SHADER_STAGE_FRAGMENT_BIT,
-                0,
-                sizeof(MaterialPushConstants),
-                &obj.material->pushConstants);
-
-            VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-            vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    obj.material->shader->pipelineLayout,
-                                    0, 1, &obj.material->descriptorSet, 0, nullptr);
-
-            vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()), 1, 0, 0, 0);
-        }
-
-        // ✅ PASO 2: Renderizar objetos TRANSPARENTES
-        // NOTA: Para ordenar correctamente necesitas la posición de la cámara en RenderObject
-        // Por ahora renderizamos en el orden que están, lo cual funciona para muchos casos
-
-        for (const auto &obj : m_RenderObjects)
-        {
-            if (!obj.mesh || !obj.material || !obj.material->shader)
-                continue;
-
-            if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
-                continue;
-
-            if (!obj.material->shader->pipeline)
-                continue;
-
-            // Solo objetos transparentes
-            if (!obj.material->shader->config.blendEnable)
-                continue;
-
-            // Bind pipeline solo si cambió
-            if (obj.material->shader->pipeline != lastPipeline)
-            {
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  obj.material->shader->pipeline);
-                lastPipeline = obj.material->shader->pipeline;
-                lastLayout = obj.material->shader->pipelineLayout;
-            }
-
-            // Push constants
-            vkCmdPushConstants(
-                cmd,
-                obj.material->shader->pipelineLayout,
-                VK_SHADER_STAGE_FRAGMENT_BIT,
-                0,
-                sizeof(MaterialPushConstants),
-                &obj.material->pushConstants);
-
-            // Bind buffers
-            VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-            vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-            // Bind descriptor set
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    obj.material->shader->pipelineLayout,
-                                    0, 1, &obj.material->descriptorSet, 0, nullptr);
-
-            // Draw
-            vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()), 1, 0, 0, 0);
-        }
-
-        // Renderizar ImGui si hay callback
-        if (imguiRenderCallback)
-        {
-            imguiRenderCallback(cmd);
-        }
-
-        vkCmdEndRenderPass(cmd);
-
-        if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
-            throw std::runtime_error("Error finalizando command buffer");
+        vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(writes.size()),
+                               writes.data(), 0, nullptr);
     }
 
     void GFX::CleanupSwapchain()
@@ -2648,14 +2327,16 @@ namespace Mantrax
         m_SwapchainExtent.width = width;
         m_SwapchainExtent.height = height;
 
-        // NUEVO: Limpiar render passes personalizados primero
+        // Limpiar render passes personalizados
         CleanupCustomRenderPasses();
 
+        // Invalidar descriptor sets de meshes (se recrearán automáticamente)
         for (auto &obj : m_RenderObjects)
         {
-            if (obj.material && obj.material->descriptorSet != VK_NULL_HANDLE)
+            if (obj.mesh && obj.mesh->descriptorSet != VK_NULL_HANDLE)
             {
-                obj.material->descriptorSet = VK_NULL_HANDLE;
+                // El descriptor set se liberará con el pool, solo invalidamos la referencia
+                obj.mesh->descriptorSet = VK_NULL_HANDLE;
             }
         }
 
@@ -2668,8 +2349,7 @@ namespace Mantrax
         CreateFramebuffers();
         CreateCommandBuffers();
 
-        std::vector<RenderPassConfig> savedConfigs;
-
+        // Recrear shaders
         auto shadersToRecreate = m_AllShaders;
 
         for (auto &shader : shadersToRecreate)
@@ -2693,25 +2373,410 @@ namespace Mantrax
             CreateShaderPipeline(shader);
         }
 
+        // Recrear descriptor sets para meshes
         for (auto &obj : m_RenderObjects)
         {
-            if (obj.material && obj.material->shader)
+            if (obj.mesh && obj.material && obj.material->shader)
             {
-                CreateDescriptorSet(obj.material);
-
-                if (obj.material->pbrTextures.albedo ||
-                    obj.material->pbrTextures.normal ||
-                    obj.material->pbrTextures.metallic ||
-                    obj.material->pbrTextures.roughness ||
-                    obj.material->pbrTextures.ao)
-                {
-                    UpdatePBRDescriptorSet(obj.material);
-                }
+                CreateMeshDescriptorSet(obj.mesh, obj.material);
             }
         }
 
         m_NeedCommandBufferRebuild = true;
+
+        std::cout << "✅ Swapchain recreada: " << width << "x" << height << "\n";
     }
+
+    // ============================================
+    // FUNCIÓN COMPLETA: RecordCommandBuffer
+    // ============================================
+
+    void GFX::RecordCommandBuffer(VkCommandBuffer cmd, uint32_t index,
+                                  std::function<void(VkCommandBuffer)> imguiRenderCallback)
+    {
+        if (cmd == VK_NULL_HANDLE || index >= m_SwapchainFramebuffers.size())
+        {
+            throw std::runtime_error("Command buffer o índice inválido");
+        }
+
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+        if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
+            throw std::runtime_error("Error comenzando command buffer");
+
+        std::array<VkClearValue, 2> clearValues{};
+        clearValues[0].color = m_Config.clearColor;
+        clearValues[1].depthStencil = {1.0f, 0};
+
+        VkRenderPassBeginInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = m_RenderPass;
+        renderPassInfo.framebuffer = m_SwapchainFramebuffers[index];
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = m_SwapchainExtent;
+        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+        renderPassInfo.pClearValues = clearValues.data();
+
+        vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        // ✅ ESTABLECER VIEWPORT Y SCISSOR DINÁMICOS
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(m_SwapchainExtent.width);
+        viewport.height = static_cast<float>(m_SwapchainExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = {0, 0};
+        scissor.extent = m_SwapchainExtent;
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+        VkPipeline lastPipeline = VK_NULL_HANDLE;
+
+        // ✅ PASO 1: Renderizar objetos OPACOS primero
+        for (const auto &obj : m_RenderObjects)
+        {
+            if (!obj.mesh || !obj.material || !obj.material->shader)
+                continue;
+
+            if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
+                continue;
+
+            if (!obj.material->shader->pipeline)
+                continue;
+
+            // Saltar objetos transparentes en este pase
+            if (obj.material->shader->config.blendEnable)
+                continue;
+
+            if (obj.material->shader->pipeline != lastPipeline)
+            {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  obj.material->shader->pipeline);
+                lastPipeline = obj.material->shader->pipeline;
+            }
+
+            // Push constants del material
+            vkCmdPushConstants(
+                cmd,
+                obj.material->shader->pipelineLayout,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                0,
+                sizeof(MaterialPushConstants),
+                &obj.material->pushConstants);
+
+            VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+            // ✅ CAMBIO CRÍTICO: Usar descriptor set del MESH
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    obj.material->shader->pipelineLayout,
+                                    0, 1, &obj.mesh->descriptorSet, 0, nullptr);
+
+            vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()),
+                             1, 0, 0, 0);
+        }
+
+        // ✅ PASO 2: Renderizar objetos TRANSPARENTES
+        for (const auto &obj : m_RenderObjects)
+        {
+            if (!obj.mesh || !obj.material || !obj.material->shader)
+                continue;
+
+            if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
+                continue;
+
+            if (!obj.material->shader->pipeline)
+                continue;
+
+            // Solo objetos transparentes
+            if (!obj.material->shader->config.blendEnable)
+                continue;
+
+            if (obj.material->shader->pipeline != lastPipeline)
+            {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  obj.material->shader->pipeline);
+                lastPipeline = obj.material->shader->pipeline;
+            }
+
+            // Push constants del material
+            vkCmdPushConstants(
+                cmd,
+                obj.material->shader->pipelineLayout,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                0,
+                sizeof(MaterialPushConstants),
+                &obj.material->pushConstants);
+
+            VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+            // ✅ CAMBIO CRÍTICO: Usar descriptor set del MESH
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    obj.material->shader->pipelineLayout,
+                                    0, 1, &obj.mesh->descriptorSet, 0, nullptr);
+
+            vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()),
+                             1, 0, 0, 0);
+        }
+
+        // Renderizar ImGui si hay callback
+        if (imguiRenderCallback)
+        {
+            imguiRenderCallback(cmd);
+        }
+
+        vkCmdEndRenderPass(cmd);
+
+        if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
+            throw std::runtime_error("Error finalizando command buffer");
+    }
+
+    // ============================================
+    // FUNCIÓN COMPLETA: RenderToOffscreenFramebuffer
+    // ============================================
+
+    void GFX::RenderToOffscreenFramebuffer(std::shared_ptr<OffscreenFramebuffer> offscreen,
+                                           const std::vector<RenderObject> &objects)
+    {
+        VkCommandBuffer cmd = BeginSingleTimeCommands();
+
+        // Transición: SHADER_READ_ONLY → COLOR_ATTACHMENT
+        VkImageMemoryBarrier barrier1{};
+        barrier1.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier1.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier1.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier1.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier1.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier1.image = offscreen->colorImage;
+        barrier1.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier1.subresourceRange.baseMipLevel = 0;
+        barrier1.subresourceRange.levelCount = 1;
+        barrier1.subresourceRange.baseArrayLayer = 0;
+        barrier1.subresourceRange.layerCount = 1;
+        barrier1.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        barrier1.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier1);
+
+        // Comenzar render pass
+        std::array<VkClearValue, 2> clearValues{};
+        clearValues[0].color = m_Config.clearColor;
+        clearValues[1].depthStencil = {1.0f, 0};
+
+        VkRenderPassBeginInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = offscreen->renderPass;
+        renderPassInfo.framebuffer = offscreen->framebuffer;
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = offscreen->extent;
+        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+        renderPassInfo.pClearValues = clearValues.data();
+
+        vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        // ✅ ESTABLECER VIEWPORT Y SCISSOR
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(offscreen->extent.width);
+        viewport.height = static_cast<float>(offscreen->extent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = {0, 0};
+        scissor.extent = offscreen->extent;
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+        VkPipeline lastPipeline = VK_NULL_HANDLE;
+
+        // Renderizar objetos OPACOS primero
+        for (const auto &obj : objects)
+        {
+            if (!obj.mesh || !obj.material || !obj.material->shader)
+                continue;
+
+            if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
+                continue;
+
+            if (!obj.material->shader->pipeline)
+                continue;
+
+            // Saltar transparentes
+            if (obj.material->shader->config.blendEnable)
+                continue;
+
+            if (obj.material->shader->pipeline != lastPipeline)
+            {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  obj.material->shader->pipeline);
+                lastPipeline = obj.material->shader->pipeline;
+            }
+
+            vkCmdPushConstants(
+                cmd,
+                obj.material->shader->pipelineLayout,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                0,
+                sizeof(MaterialPushConstants),
+                &obj.material->pushConstants);
+
+            VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+            // ✅ CAMBIO: Usar descriptor set del MESH
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    obj.material->shader->pipelineLayout,
+                                    0, 1, &obj.mesh->descriptorSet, 0, nullptr);
+
+            vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()),
+                             1, 0, 0, 0);
+        }
+
+        // Renderizar objetos TRANSPARENTES
+        for (const auto &obj : objects)
+        {
+            if (!obj.mesh || !obj.material || !obj.material->shader)
+                continue;
+
+            if (!obj.mesh->vertexBuffer || !obj.mesh->indexBuffer)
+                continue;
+
+            if (!obj.material->shader->pipeline)
+                continue;
+
+            // Solo transparentes
+            if (!obj.material->shader->config.blendEnable)
+                continue;
+
+            if (obj.material->shader->pipeline != lastPipeline)
+            {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  obj.material->shader->pipeline);
+                lastPipeline = obj.material->shader->pipeline;
+            }
+
+            vkCmdPushConstants(
+                cmd,
+                obj.material->shader->pipelineLayout,
+                VK_SHADER_STAGE_FRAGMENT_BIT,
+                0,
+                sizeof(MaterialPushConstants),
+                &obj.material->pushConstants);
+
+            VkBuffer vertexBuffers[] = {obj.mesh->vertexBuffer};
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(cmd, obj.mesh->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+            // ✅ CAMBIO: Usar descriptor set del MESH
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    obj.material->shader->pipelineLayout,
+                                    0, 1, &obj.mesh->descriptorSet, 0, nullptr);
+
+            vkCmdDrawIndexed(cmd, static_cast<uint32_t>(obj.mesh->indices.size()),
+                             1, 0, 0, 0);
+        }
+
+        vkCmdEndRenderPass(cmd);
+
+        // Transición: COLOR_ATTACHMENT → SHADER_READ_ONLY
+        VkImageMemoryBarrier barrier2{};
+        barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier2.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier2.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier2.image = offscreen->colorImage;
+        barrier2.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier2.subresourceRange.baseMipLevel = 0;
+        barrier2.subresourceRange.levelCount = 1;
+        barrier2.subresourceRange.baseArrayLayer = 0;
+        barrier2.subresourceRange.layerCount = 1;
+        barrier2.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier2.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier2);
+
+        EndSingleTimeCommands(cmd);
+    }
+
+    // ============================================
+    // FUNCIÓN COMPLETA: UpdatePBRDescriptorSet
+    // ============================================
+
+    void GFX::UpdatePBRDescriptorSet(std::shared_ptr<Material> material)
+    {
+        // NOTA: Esta función ahora debe recibir también el mesh
+        // Se mantiene para compatibilidad pero el flujo correcto es:
+        // 1. Crear mesh
+        // 2. Crear material
+        // 3. Llamar a CreateMeshDescriptorSet(mesh, material)
+
+        std::cerr << "⚠️ WARNING: UpdatePBRDescriptorSet() está deprecada.\n"
+                  << "Usa CreateMeshDescriptorSet(mesh, material) en su lugar.\n";
+    }
+
+    // ============================================
+    // FUNCIÓN NUEVA: UpdateMeshMaterialTextures
+    // ============================================
+
+    void GFX::UpdateMeshMaterialTextures(std::shared_ptr<Mesh> mesh, std::shared_ptr<Material> material)
+    {
+        if (!mesh || !material)
+        {
+            throw std::runtime_error("Mesh y material deben ser válidos");
+        }
+
+        // Si el mesh no tiene descriptor set, crearlo
+        if (mesh->descriptorSet == VK_NULL_HANDLE)
+        {
+            CreateMeshDescriptorSet(mesh, material);
+        }
+        else
+        {
+            // Recrear descriptor set con las nuevas texturas
+            // Primero liberarlo
+            vkFreeDescriptorSets(m_Device, m_DescriptorPool, 1, &mesh->descriptorSet);
+            mesh->descriptorSet = VK_NULL_HANDLE;
+
+            // Crear nuevo
+            CreateMeshDescriptorSet(mesh, material);
+        }
+
+        std::cout << "✅ Texturas del mesh actualizadas correctamente\n";
+    }
+
+    // ============================================
+    // FUNCIÓN COMPLETA: Cleanup
+    // ============================================
 
     void GFX::Cleanup()
     {
@@ -2721,72 +2786,124 @@ namespace Mantrax
         if (m_Device != VK_NULL_HANDLE)
             vkDeviceWaitIdle(m_Device);
 
+        // Limpiar render objects
         for (auto &obj : m_RenderObjects)
         {
             if (obj.mesh)
             {
-                if (obj.mesh->vertexBuffer)
+                // Limpiar buffers del mesh
+                if (obj.mesh->vertexBuffer != VK_NULL_HANDLE)
+                {
                     vkDestroyBuffer(m_Device, obj.mesh->vertexBuffer, nullptr);
-                if (obj.mesh->vertexBufferMemory)
+                    obj.mesh->vertexBuffer = VK_NULL_HANDLE;
+                }
+                if (obj.mesh->vertexBufferMemory != VK_NULL_HANDLE)
+                {
                     vkFreeMemory(m_Device, obj.mesh->vertexBufferMemory, nullptr);
-                if (obj.mesh->indexBuffer)
+                    obj.mesh->vertexBufferMemory = VK_NULL_HANDLE;
+                }
+                if (obj.mesh->indexBuffer != VK_NULL_HANDLE)
+                {
                     vkDestroyBuffer(m_Device, obj.mesh->indexBuffer, nullptr);
-                if (obj.mesh->indexBufferMemory)
+                    obj.mesh->indexBuffer = VK_NULL_HANDLE;
+                }
+                if (obj.mesh->indexBufferMemory != VK_NULL_HANDLE)
+                {
                     vkFreeMemory(m_Device, obj.mesh->indexBufferMemory, nullptr);
-            }
+                    obj.mesh->indexBufferMemory = VK_NULL_HANDLE;
+                }
 
-            if (obj.material)
-            {
-                if (obj.material->uniformBuffer)
-                    vkDestroyBuffer(m_Device, obj.material->uniformBuffer, nullptr);
-                if (obj.material->uniformBufferMemory)
-                    vkFreeMemory(m_Device, obj.material->uniformBufferMemory, nullptr);
+                // ✅ AÑADIR: Limpiar uniform buffer del mesh
+                if (obj.mesh->uniformBuffer != VK_NULL_HANDLE)
+                {
+                    vkDestroyBuffer(m_Device, obj.mesh->uniformBuffer, nullptr);
+                    obj.mesh->uniformBuffer = VK_NULL_HANDLE;
+                }
+                if (obj.mesh->uniformBufferMemory != VK_NULL_HANDLE)
+                {
+                    vkFreeMemory(m_Device, obj.mesh->uniformBufferMemory, nullptr);
+                    obj.mesh->uniformBufferMemory = VK_NULL_HANDLE;
+                }
+
+                // Descriptor set se libera automáticamente con el pool
+                obj.mesh->descriptorSet = VK_NULL_HANDLE;
             }
         }
 
+        // Limpiar shaders
         for (auto &shader : m_AllShaders)
         {
-            if (shader->pipeline)
+            if (shader->pipeline != VK_NULL_HANDLE)
+            {
                 vkDestroyPipeline(m_Device, shader->pipeline, nullptr);
-            if (shader->pipelineLayout)
+                shader->pipeline = VK_NULL_HANDLE;
+            }
+            if (shader->pipelineLayout != VK_NULL_HANDLE)
+            {
                 vkDestroyPipelineLayout(m_Device, shader->pipelineLayout, nullptr);
-            if (shader->descriptorSetLayout)
+                shader->pipelineLayout = VK_NULL_HANDLE;
+            }
+            if (shader->descriptorSetLayout != VK_NULL_HANDLE)
+            {
                 vkDestroyDescriptorSetLayout(m_Device, shader->descriptorSetLayout, nullptr);
+                shader->descriptorSetLayout = VK_NULL_HANDLE;
+            }
         }
 
-        if (m_Device == VK_NULL_HANDLE && m_Instance == VK_NULL_HANDLE)
-            return;
-
-        if (m_Device != VK_NULL_HANDLE)
-            vkDeviceWaitIdle(m_Device);
-
+        // Limpiar custom render passes
         CleanupCustomRenderPasses();
 
-        if (m_InFlightFence)
+        // Sincronización
+        if (m_InFlightFence != VK_NULL_HANDLE)
+        {
             vkDestroyFence(m_Device, m_InFlightFence, nullptr);
-        if (m_RenderFinishedSemaphore)
+            m_InFlightFence = VK_NULL_HANDLE;
+        }
+        if (m_RenderFinishedSemaphore != VK_NULL_HANDLE)
+        {
             vkDestroySemaphore(m_Device, m_RenderFinishedSemaphore, nullptr);
-        if (m_ImageAvailableSemaphore)
+            m_RenderFinishedSemaphore = VK_NULL_HANDLE;
+        }
+        if (m_ImageAvailableSemaphore != VK_NULL_HANDLE)
+        {
             vkDestroySemaphore(m_Device, m_ImageAvailableSemaphore, nullptr);
+            m_ImageAvailableSemaphore = VK_NULL_HANDLE;
+        }
 
+        // Swapchain
         CleanupSwapchain();
 
-        if (m_DescriptorPool)
+        // Descriptor pool
+        if (m_DescriptorPool != VK_NULL_HANDLE)
+        {
             vkDestroyDescriptorPool(m_Device, m_DescriptorPool, nullptr);
+            m_DescriptorPool = VK_NULL_HANDLE;
+        }
 
-        if (m_CommandPool)
+        // Command pool
+        if (m_CommandPool != VK_NULL_HANDLE)
+        {
             vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
+            m_CommandPool = VK_NULL_HANDLE;
+        }
 
-        if (m_Device)
+        // Device y instance
+        if (m_Device != VK_NULL_HANDLE)
+        {
             vkDestroyDevice(m_Device, nullptr);
+            m_Device = VK_NULL_HANDLE;
+        }
 
-        if (m_Surface)
+        if (m_Surface != VK_NULL_HANDLE)
+        {
             vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+            m_Surface = VK_NULL_HANDLE;
+        }
 
-        if (m_Instance)
+        if (m_Instance != VK_NULL_HANDLE)
+        {
             vkDestroyInstance(m_Instance, nullptr);
-
-        m_Device = VK_NULL_HANDLE;
-        m_Instance = VK_NULL_HANDLE;
+            m_Instance = VK_NULL_HANDLE;
+        }
     }
 }

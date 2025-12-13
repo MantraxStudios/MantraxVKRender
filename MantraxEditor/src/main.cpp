@@ -148,6 +148,9 @@ glm::vec3 TileToWorld(int tileX, int tileY, float tileSize = 1.0f)
 // ============================================================================
 // FUNCIÓN PARA CREAR LA ESCENA INICIAL CON MATERIALMANAGER
 // ============================================================================
+// ============================================================================
+// FUNCIÓN PARA CREAR LA ESCENA INICIAL CON MATERIALMANAGER
+// ============================================================================
 void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRenderer *sceneRenderer)
 {
     Scene *scene = SceneManager::GetActiveScene();
@@ -180,11 +183,11 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
     auto groundMaterial = materialManager->CreatePBRMaterialFromFiles(
         "GroundMaterial",
         loader->normalShader,
-        "Ground A2_E.png", // Albedo
-        "",                // Normal (vacío si no existe)
-        "",                // Metallic (vacío si no existe)
-        "",                // Roughness (vacío si no existe)
-        "",                // AO (vacío si no existe)
+        "Ground A2_E.png",
+        "",
+        "",
+        "",
+        "",
         groundProps);
 
     std::cout << "✅ PBR textures loaded successfully!\n";
@@ -200,16 +203,22 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
         throw std::runtime_error("Failed to create ground plane");
     }
 
-    // Asignar material del MaterialManager
+    // ✅ CAMBIO CRÍTICO: Asignar material Y crear descriptor set
     groundPlane->material = groundMaterial;
     groundPlane->renderObj.material = groundMaterial;
 
+    // ✅ NUEVO: Crear descriptor set para el mesh con el material
+    if (groundPlane->renderObj.mesh && groundMaterial)
+    {
+        loader->gfx->CreateMeshDescriptorSet(groundPlane->renderObj.mesh, groundMaterial);
+        std::cout << "✅ Descriptor set created for ground plane\n";
+    }
+
     sceneRenderer->AddObject(groundPlane);
 
-    // Crear EntityObject en lugar de Entity directamente
+    // Crear EntityObject
     EntityObject groundEntity = scene->CreateEntityObject("GroundPlane");
 
-    // Agregar componentes usando el nuevo sistema
     Transform &groundTransform = groundEntity.AddComponent<Transform>();
     groundTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
     groundTransform.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -229,18 +238,16 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
         "Gold",
         loader->normalShader,
         glm::vec3(1.0f, 0.84f, 0.0f),
-        0.95f, // Muy metálico
-        0.2f   // Poco rugoso
-    );
+        0.95f,
+        0.2f);
 
     // Material de plástico rojo
     auto redPlasticMaterial = materialManager->CreateSolidColorMaterial(
         "RedPlastic",
         loader->normalShader,
         glm::vec3(0.8f, 0.1f, 0.1f),
-        0.0f, // No metálico
-        0.6f  // Algo rugoso
-    );
+        0.0f,
+        0.6f);
 
     // Material de plástico verde
     auto greenPlasticMaterial = materialManager->CreateSolidColorMaterial(
@@ -267,10 +274,19 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
 
     auto skyboxMaterial = loader->gfx->CreateMaterial(loader->skyboxShader);
     skyboxMaterial->SetBaseColor(2.0f, 2.0f, 2.0f);
-    loader->gfx->SetMaterialPBRTextures(skyboxMaterial, skyboxTexture, nullptr, nullptr, nullptr, nullptr);
+
+    // ✅ CAMBIO: Ya no usar SetMaterialPBRTextures, usar el nuevo flujo
+    skyboxMaterial->SetAlbedoTexture(skyboxTexture);
 
     auto skyboxRenderObj = skybox.GetRenderObject();
     skyboxRenderObj.material = skyboxMaterial;
+
+    // ✅ NUEVO: Crear descriptor set para skybox
+    if (skyboxRenderObj.mesh && skyboxMaterial)
+    {
+        loader->gfx->CreateMeshDescriptorSet(skyboxRenderObj.mesh, skyboxMaterial);
+        std::cout << "✅ Descriptor set created for skybox\n";
+    }
 
     // Crear EntityObject para el skybox
     EntityObject skyboxEntity = scene->CreateEntityObject("Skybox");
@@ -338,7 +354,8 @@ int main()
         ServiceLocator::instance().registerService("SceneRenderer", std::make_shared<SceneRenderer>(loader->gfx.get()));
         auto sceneRenderer = ServiceLocator::instance().get<SceneRenderer>("SceneRenderer");
 
-        ModelManager modelManager(loader->gfx.get());
+        ServiceLocator::instance().registerService("ModelManager", std::make_shared<ModelManager>(loader->gfx.get()));
+        std::shared_ptr<ModelManager> modelManager = ServiceLocator::instance().get<ModelManager>("ModelManager");
 
         // ====================================================================
         // CREAR ESCENA CON EL NUEVO SISTEMA
@@ -354,7 +371,7 @@ int main()
         std::cout << "✅ Scene created: " << activeScene->GetName() << "\n";
 
         // Setup de la escena (incluye MaterialManager)
-        SetupGameScene(loader.get(), &modelManager, sceneRenderer.get());
+        SetupGameScene(loader.get(), modelManager.get(), sceneRenderer.get());
 
         // Obtener MaterialManager para uso posterior
         auto materialManager = ServiceLocator::instance().get<Mantrax::MaterialManager>("MaterialManager");

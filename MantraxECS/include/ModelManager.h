@@ -1,6 +1,7 @@
 #pragma once
 #include "../../MantraxRender/include/MantraxGFX_API.h"
 #include "AssimpLoader.h"
+#include "IService.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
@@ -19,11 +20,14 @@ struct MANTRAX_API RenderableObject
     std::string name;
 };
 
-class MANTRAX_API ModelManager
+class MANTRAX_API ModelManager : public IService
 {
 public:
     ModelManager(Mantrax::GFX *gfx);
     ~ModelManager();
+
+    // Implementación de IService
+    std::string getName() override { return "ModelManager"; }
 
     // Crear modelo desde archivo
     RenderableObject *CreateModelFromFile(

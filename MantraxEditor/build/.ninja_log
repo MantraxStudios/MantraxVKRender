@@ -1,8 +1,8 @@
 # ninja log v7
-36	3144	7869276705343909	CMakeFiles/MantraxEditor.dir/src/EngineLoader.cpp.obj	eb65cb548fbbd775
-43	6101	7869470633321410	CMakeFiles/MantraxEditor.dir/src/main.cpp.obj	e7c8cee4a9b048f4
-18	148	7869488607520452	build.ninja	eb9c57a22dea3f00
-18	148	7869488607485161	C:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/build/cmake_install.cmake	eb9c57a22dea3f00
+11	1580	7872758523237864	CMakeFiles/MantraxEditor.dir/src/EngineLoader.cpp.obj	eb65cb548fbbd775
+18	3935	7872758523314173	CMakeFiles/MantraxEditor.dir/src/main.cpp.obj	e7c8cee4a9b048f4
+18	148	7873551453590611	build.ninja	eb9c57a22dea3f00
+18	148	7873551453549278	C:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/build/cmake_install.cmake	eb9c57a22dea3f00
 42	352	7868464068683585	CMakeFiles/MantraxEditor.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_impl_vulkan.cpp.obj	84349bedb5a934b9
 49	550	7868464068754039	CMakeFiles/MantraxEditor.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_impl_win32.cpp.obj	2b78407528ed696
 27	597	7868464068526831	CMakeFiles/MantraxEditor.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_demo.cpp.obj	665c9e36289cb0a9
@@ -10,8 +10,8 @@
 35	877	7868464068617543	CMakeFiles/MantraxEditor.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_draw.cpp.obj	24962eb06b3803e7
 63	1000	7868464068902491	CMakeFiles/MantraxEditor.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui_widgets.cpp.obj	90dcddaead0ebf55
 21	1501	7868464068476676	CMakeFiles/MantraxEditor.dir/C_/Users/tupap/Desktop/MantraxVKRender/MantraxAddons/include/imgui/imgui.cpp.obj	ce84675494502114
-39	1577	7868644256341342	CMakeFiles/MantraxEditor.dir/src/ui/SceneView.cpp.obj	59b6a675cbb775f8
-6102	6826	7869470693913322	MantraxEditor.exe	728871bb7a46add6
+33	1602	7872758523467589	CMakeFiles/MantraxEditor.dir/src/ui/SceneView.cpp.obj	59b6a675cbb775f8
+3935	4386	7872758562486507	MantraxEditor.exe	728871bb7a46add6
 34	317	7868522606277035	CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_impl_vulkan.cpp.obj	52de3cae06facddf
 38	447	7868522606317240	CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_impl_win32.cpp.obj	dab8d4d12c7367cb
 27	568	7868522606211743	CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_demo.cpp.obj	21858c38b5eb3a7e
@@ -20,6 +20,9 @@
 48	991	7868522606423059	CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_widgets.cpp.obj	b7c88a62c6fcf458
 22	1495	7868522606161567	CMakeFiles/MantraxEditor.dir/includes/imgui/imgui.cpp.obj	1cccef5d5d0032bc
 61	1402	7869356351468391	CMakeFiles/MantraxEditor.dir/src/ui/MenuBar.cpp.obj	e4f5b5dd281649db
-142	3961	7869470634340563	CMakeFiles/MantraxEditor.dir/src/ui/Inspector.cpp.obj	dbf7ae1f359d485f
-25	3071	7869488608675821	CMakeFiles/MantraxEditor.dir/src/main.cpp.obj	e7c8cee4a9b048f4
-3072	3389	7869488639150525	MantraxEditor.exe	728871bb7a46add6
+25	2459	7872758523386251	CMakeFiles/MantraxEditor.dir/src/ui/Inspector.cpp.obj	dbf7ae1f359d485f
+9	1713	7873551454302132	CMakeFiles/MantraxEditor.dir/src/EngineLoader.cpp.obj	eb65cb548fbbd775
+33	1742	7873551454538135	CMakeFiles/MantraxEditor.dir/src/ui/SceneView.cpp.obj	59b6a675cbb775f8
+24	2621	7873551454446652	CMakeFiles/MantraxEditor.dir/src/ui/Inspector.cpp.obj	dbf7ae1f359d485f
+18	3984	7873551454388466	CMakeFiles/MantraxEditor.dir/src/main.cpp.obj	e7c8cee4a9b048f4
+3984	4258	7873551494051056	MantraxEditor.exe	728871bb7a46add6

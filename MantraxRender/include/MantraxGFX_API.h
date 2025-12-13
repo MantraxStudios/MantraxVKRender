@@ -102,6 +102,12 @@ namespace Mantrax
         VkBuffer indexBuffer = VK_NULL_HANDLE;
         VkDeviceMemory indexBufferMemory = VK_NULL_HANDLE;
 
+        // ✅ AÑADIR: UBO y buffers para transformación
+        UniformBufferObject ubo{};
+        VkBuffer uniformBuffer = VK_NULL_HANDLE;
+        VkDeviceMemory uniformBufferMemory = VK_NULL_HANDLE;
+        VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+
         Mesh() = default;
         Mesh(const std::vector<Vertex> &verts, const std::vector<uint32_t> &inds)
             : vertices(verts), indices(inds) {}
@@ -177,11 +183,11 @@ namespace Mantrax
     {
     public:
         std::shared_ptr<Shader> shader;
-        VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 
-        UniformBufferObject ubo{};
-        VkBuffer uniformBuffer = VK_NULL_HANDLE;
-        VkDeviceMemory uniformBufferMemory = VK_NULL_HANDLE;
+        // UniformBufferObject ubo{};
+        // VkBuffer uniformBuffer = VK_NULL_HANDLE;
+        // VkDeviceMemory uniformBufferMemory = VK_NULL_HANDLE;
+        // VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 
         // Texturas PBR
         PBRTextures pbrTextures;
@@ -359,6 +365,9 @@ namespace Mantrax
 
         std::shared_ptr<Mesh> CreateMesh(const std::vector<Vertex> &vertices,
                                          const std::vector<uint32_t> &indices);
+        void UpdateMeshUBO(Mesh *mesh, const UniformBufferObject &ubo);
+        void CreateMeshDescriptorSet(std::shared_ptr<Mesh> mesh, std::shared_ptr<Material> material);
+        void UpdateMeshMaterialTextures(std::shared_ptr<Mesh> mesh, std::shared_ptr<Material> material);
 
         std::shared_ptr<Material> CreateMaterial(std::shared_ptr<Shader> shader);
 
@@ -396,8 +405,8 @@ namespace Mantrax
         void WaitIdle();
 
         void ClearRenderObjectsSafe();
-        void AddRenderObjectSafe(const RenderObject &obj);
         std::vector<RenderObject> GetRenderObjects() const;
+        void UpdateRenderObjectUBO(RenderObject *obj, const UniformBufferObject &ubo);
 
         VkInstance GetInstance() const { return m_Instance; }
         VkDevice GetDevice() const { return m_Device; }
@@ -464,6 +473,8 @@ namespace Mantrax
 
         std::vector<std::shared_ptr<Shader>> m_AllShaders;
 
+        void AddRenderObjectSafe(const RenderObject &obj);
+
     private:
         void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
         void UpdateDescriptorSetWithTexture(std::shared_ptr<Material> material);
@@ -505,7 +516,9 @@ namespace Mantrax
         void CreateShaderPipeline(std::shared_ptr<Shader> shader, VkRenderPass renderPass = VK_NULL_HANDLE);
         void CreateVertexBuffer(std::shared_ptr<Mesh> mesh);
         void CreateIndexBuffer(std::shared_ptr<Mesh> mesh);
-        void CreateUniformBuffer(std::shared_ptr<Material> material);
+        // void CreateUniformBuffer(std::shared_ptr<Material> material);
+        void CreateUniformBuffer(std::shared_ptr<Mesh> mesh);
+        void CreateDescriptorSet(std::shared_ptr<Mesh> mesh, std::shared_ptr<Material> material);
         void CreateDescriptorSet(std::shared_ptr<Material> material);
         void RecordCommandBuffer(VkCommandBuffer cmd, uint32_t index,
                                  std::function<void(VkCommandBuffer)> imguiRenderCallback = nullptr);

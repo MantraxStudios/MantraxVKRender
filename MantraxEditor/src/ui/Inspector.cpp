@@ -2,6 +2,9 @@
 #include "../../MantraxECS/include/SceneManager.h"
 #include "../../MantraxECS/include/ServiceLocator.h"
 #include "../../MantraxECS/include/SceneRenderer.h"
+#include "../../MantraxECS/include/MaterialManager.h"
+#include "../../MantraxECS/include/ModelManager.h"
+#include "../../includes/EngineLoader.h"
 #include <cstring>
 
 Inspector::Inspector()
@@ -388,10 +391,73 @@ void Inspector::OnRender()
         {
             if (ImGui::Button("Add Render Component"))
             {
-                world.addComponent<RenderComponent>(entity);
-
+                auto materialManager = ServiceLocator::instance().get<Mantrax::MaterialManager>("MaterialManager");
                 auto sceneRenderer = ServiceLocator::instance().get<SceneRenderer>("SceneRenderer");
-                sceneRenderer->AddObject(world.getComponent<RenderComponent>(entity)->renderObject);
+                auto loader = ServiceLocator::instance().get<EngineLoader>("EngineLoader");
+                std::shared_ptr<ModelManager> modelManager = ServiceLocator::instance().get<ModelManager>("ModelManager");
+
+                if (!modelManager)
+                {
+                    std::cerr << "Error: ModelManager not available" << std::endl;
+                }
+                else if (!materialManager)
+                {
+                    std::cerr << "Error: MaterialManager not available" << std::endl;
+                }
+                else if (!sceneRenderer)
+                {
+                    std::cerr << "Error: SceneRenderer not available" << std::endl;
+                }
+                else
+                {
+                    // Crear el modelo (mesh + renderObject)
+                    auto renderObject = modelManager->CreateModelOnly("Plane.fbx", selectedObj.name + "_Model");
+
+                    if (!renderObject)
+                    {
+                        std::cerr << "Error: Failed to create model" << std::endl;
+                    }
+                    else
+                    {
+                        // Obtener el material (puede ser compartido entre múltiples objetos)
+                        auto material = materialManager->GetMaterial("GroundMaterial");
+
+                        if (material)
+                        {
+                            // Asignar el mismo material (esto es válido y eficiente)
+                            renderObject->material = material;
+                            renderObject->renderObj.material = material;
+                        }
+                        else
+                        {
+                            std::cerr << "Warning: Material 'GroundMaterial' not found" << std::endl;
+                        }
+
+                        sceneRenderer->AddObject(renderObject);
+
+                        world.addComponent<RenderComponent>(entity);
+
+                        auto *renderComp = world.getComponent<RenderComponent>(entity);
+                        if (renderComp)
+                        {
+                            renderComp->renderObject = renderObject;
+                        }
+                    }
+                }
+            }
+
+            // Popup de error (opcional, colócalo después del botón)
+            if (ImGui::BeginPopupModal("RenderComponentError", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            {
+                ImGui::Text("Failed to add Render Component");
+                ImGui::Separator();
+
+                if (ImGui::Button("OK", ImVec2(120, 0)))
+                {
+                    ImGui::CloseCurrentPopup();
+                }
+
+                ImGui::EndPopup();
             }
         }
     }
