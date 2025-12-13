@@ -1,10 +1,15 @@
 #pragma once
 #include "../../MantraxRender/include/MantraxGFX_API.h"
+#include "../../MantraxECS/include/SceneManager.h"
 #include "../imgui/imgui.h"
 #include "../imgui/imgui_impl_win32.h"
 #include "../imgui/imgui_impl_vulkan.h"
+#include "../imgui/ImGuizmo.h"
 #include "../UIBehaviour.h"
+#include "../Selection.h"
 #include <memory>
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 // Forward declaration de ImVec2
 struct ImVec2;
@@ -34,6 +39,10 @@ private:
     static const int MIN_WIDTH = 64;
     static const int MIN_HEIGHT = 64;
     static const int RESIZE_THRESHOLD = 1;
+    ImGuizmo::OPERATION gizmoOperation;
+    ImGuizmo::MODE gizmoMode;
+
+    void HandleGizmoInput();
 
 public:
     // Constructor
@@ -65,4 +74,15 @@ public:
     bool IsValid() const;
     bool HasValidRenderTarget() const { return renderID != VK_NULL_HANDLE; }
     bool HasValidFramebuffer() const { return framebuffer != nullptr; }
+
+    void RenderGizmo(
+        const glm::mat4 &view,
+        const glm::mat4 &projection,
+        const ImVec2 &imageMin,
+        const ImVec2 &imageMax);
+    void SetGizmoOperation(ImGuizmo::OPERATION operation);
+    void SetGizmoMode(ImGuizmo::MODE mode);
+    ImGuizmo::OPERATION GetGizmoOperation() const;
+    ImGuizmo::MODE GetGizmoMode() const;
+    bool IsUsingGizmo() const;
 };

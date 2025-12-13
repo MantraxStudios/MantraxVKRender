@@ -40,13 +40,9 @@ void SceneRenderer::ClearScene()
 
 void SceneRenderer::UpdateObjectTransform(
     RenderableObject *obj,
-    const glm::vec3 &position,
-    const glm::vec3 &rotation,
-    const glm::vec3 &scale)
+    const glm::mat4 &modelMatrix)
 {
-    obj->position = position;
-    obj->rotation = rotation;
-    obj->scale = scale;
+    obj->modelMatrix = modelMatrix;
 }
 
 void SceneRenderer::UpdateUBOs(Mantrax::FPSCamera *camera)
@@ -57,11 +53,7 @@ void SceneRenderer::UpdateUBOs(Mantrax::FPSCamera *camera)
 
     for (auto *obj : m_sceneObjects)
     {
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), obj->position);
-        model = model * CreateRotationMatrix(obj->rotation);
-        model = glm::scale(model, obj->scale);
-
-        CopyMat4(obj->ubo.model, model);
+        CopyMat4(obj->ubo.model, obj->modelMatrix);
         CopyMat4(obj->ubo.view, view);
         CopyMat4(obj->ubo.projection, proj);
 
@@ -93,7 +85,7 @@ std::vector<Mantrax::RenderObject> SceneRenderer::GetRenderObjects()
 
 void SceneRenderer::CopyMat4(float *dest, const glm::mat4 &src)
 {
-    memcpy(dest, glm::value_ptr(src), 16 * sizeof(float));
+    memcpy(dest, glm::value_ptr(src), sizeof(glm::mat4));
 }
 
 glm::mat4 SceneRenderer::CreateRotationMatrix(const glm::vec3 &rotation)

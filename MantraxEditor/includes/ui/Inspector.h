@@ -7,14 +7,11 @@
 #include "../includes/Components.h"
 #include "../imgui/imgui.h"
 #include "../UIBehaviour.h"
+#include "../Selection.h"
 
 class Inspector : public UIBehaviour
 {
 public:
     Inspector();
     void OnRender() override;
-
-private:
-    // Solo necesitamos el índice de selección, todo lo demás viene de SceneManager
-    int selectedObjectIndex = -1;
 };

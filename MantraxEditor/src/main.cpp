@@ -11,9 +11,9 @@
 #include "../../MantraxECS/include/Scene.h"
 #include "../../MantraxECS/include/LuaScript.h"
 #include "../../MantraxECS/include/MaterialManager.h"
+#include "../../MantraxECS/include/FPSCamera.h"
 #include "../includes/Components.h"
 #include "../includes/LuaEditor.h"
-#include "../includes/FPSCamera.h"
 #include "../includes/EngineLoader.h"
 #include "../includes/UIRender.h"
 #include "../includes/ui/SceneView.h"
@@ -90,7 +90,9 @@ void UpdateRotationSystem(Scene *scene, float deltaTime)
     auto &world = scene->GetWorld();
 
     world.forEach<Transform, Rotator>([deltaTime](ecs::Entity entity, Transform &transform, Rotator &rotator)
-                                      { transform.rotation += rotator.axis * rotator.speed * deltaTime; });
+                                      {
+        // Rotar usando el eje y velocidad del rotator
+        transform.RotateAxisAngle(rotator.axis, rotator.speed * deltaTime); });
 }
 
 void UpdatePhysicsSystem(Scene *scene, float deltaTime)
@@ -99,8 +101,8 @@ void UpdatePhysicsSystem(Scene *scene, float deltaTime)
 
     world.forEach<Transform, Velocity>([deltaTime](ecs::Entity entity, Transform &transform, Velocity &velocity)
                                        {
-        transform.position += velocity.linear * deltaTime;
-        transform.rotation += velocity.angular * deltaTime; });
+        transform.Translate(velocity.linear * deltaTime);
+        transform.RotateEuler(velocity.angular * deltaTime); });
 }
 
 void SyncRenderSystem(Scene *scene)
@@ -109,11 +111,10 @@ void SyncRenderSystem(Scene *scene)
 
     world.forEach<Transform, RenderComponent>([](ecs::Entity entity, Transform &transform, RenderComponent &render)
                                               {
+        transform.UpdateWorldMatrix();
         if (render.renderObject)
         {
-            render.renderObject->position = transform.position;
-            render.renderObject->rotation = transform.rotation;
-            render.renderObject->scale = transform.scale;
+            render.renderObject->modelMatrix = transform.GetWorldMatrix();
         } });
 }
 
@@ -145,9 +146,6 @@ glm::vec3 TileToWorld(int tileX, int tileY, float tileSize = 1.0f)
         tileY * tileSize);
 }
 
-// ============================================================================
-// FUNCIÓN PARA CREAR LA ESCENA INICIAL CON MATERIALMANAGER
-// ============================================================================
 // ============================================================================
 // FUNCIÓN PARA CREAR LA ESCENA INICIAL CON MATERIALMANAGER
 // ============================================================================
@@ -220,9 +218,9 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
     EntityObject groundEntity = scene->CreateEntityObject("GroundPlane");
 
     Transform &groundTransform = groundEntity.AddComponent<Transform>();
-    groundTransform.position = glm::vec3(0.0f, 0.0f, 0.0f);
-    groundTransform.rotation = glm::vec3(0.0f, 0.0f, 0.0f);
-    groundTransform.scale = glm::vec3(20.0f, 1.0f, 20.0f);
+    groundTransform.SetPosition(0.0f, 0.0f, 0.0f);
+    groundTransform.SetRotationFromEulerDegrees(0.0f, 0.0f, 0.0f);
+    groundTransform.SetScale(20.0f, 1.0f, 20.0f);
 
     RenderComponent &groundRender = groundEntity.AddComponent<RenderComponent>();
     groundRender.renderObject = groundPlane;
@@ -292,9 +290,9 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
     EntityObject skyboxEntity = scene->CreateEntityObject("Skybox");
 
     Transform &skyboxTransform = skyboxEntity.AddComponent<Transform>();
-    skyboxTransform.position = glm::vec3(0.0f);
-    skyboxTransform.rotation = glm::vec3(0.0f);
-    skyboxTransform.scale = glm::vec3(1.0f);
+    skyboxTransform.SetPosition(0.0f, 0.0f, 0.0f);
+    skyboxTransform.SetRotationFromEulerDegrees(0.0f, 0.0f, 0.0f);
+    skyboxTransform.SetScale(1.0f, 1.0f, 1.0f);
 
     RenderComponent &skyboxRender = skyboxEntity.AddComponent<RenderComponent>();
 
@@ -303,9 +301,7 @@ void SetupGameScene(EngineLoader *loader, ModelManager *modelManager, SceneRende
     skyboxObj->renderObj = skyboxRenderObj;
     skyboxObj->material = skyboxMaterial;
     skyboxObj->name = "Skybox";
-    skyboxObj->position = glm::vec3(0.0f);
-    skyboxObj->rotation = glm::vec3(0.0f);
-    skyboxObj->scale = glm::vec3(1.0f);
+    skyboxObj->modelMatrix = glm::mat4(1.0f);
 
     skyboxRender.renderObject = skyboxObj;
     sceneRenderer->AddObject(skyboxObj);
@@ -386,6 +382,7 @@ int main()
         camera.SetMouseSensitivity(0.1f);
         g_Camera = &camera;
 
+        sceneRenderer->camera = &camera;
         // ====================================================================
         // UI SETUP
         // ====================================================================
@@ -397,6 +394,7 @@ int main()
         g_SceneView = renderView;
         uiRender->Set(renderView);
         uiRender->Set(new MenuBar());
+
         uiRender->Set(new Inspector());
         uiRender->GetByType<SceneView>()->renderID = offscreen->renderID;
 

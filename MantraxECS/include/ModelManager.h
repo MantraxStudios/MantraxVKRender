@@ -14,9 +14,9 @@ struct MANTRAX_API RenderableObject
     Mantrax::RenderObject renderObj;
     std::shared_ptr<Mantrax::Material> material;
     Mantrax::UniformBufferObject ubo;
-    glm::vec3 position;
-    glm::vec3 rotation;
-    glm::vec3 scale;
+
+    glm::mat4 modelMatrix{1.0f};
+
     std::string name;
 };
 

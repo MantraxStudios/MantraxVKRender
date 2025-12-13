@@ -36,14 +36,6 @@ public:
         return world->getComponent<T>(entity);
     }
 
-    template <typename T>
-    const T *GetComponent() const
-    {
-        if (!world)
-            return nullptr;
-        return world->getComponent<T>(entity);
-    }
-
     // HasComponent - Verifica si tiene un componente
     template <typename T>
     bool HasComponent() const

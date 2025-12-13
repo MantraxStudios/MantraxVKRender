@@ -5,6 +5,8 @@
 #include "../../MantraxECS/include/MaterialManager.h"
 #include "../../MantraxECS/include/ModelManager.h"
 #include "../../includes/EngineLoader.h"
+#include "../../includes/imgui/ImGuizmo.h"
+
 #include <cstring>
 
 Inspector::Inspector()
@@ -60,7 +62,7 @@ void Inspector::OnRender()
             {
                 if (strlen(sceneNameBuffer) > 0)
                 {
-                    selectedObjectIndex = -1;
+                    Selection::selectedObjectIndex = -1;
 
                     SceneManager::CreateScene(sceneNameBuffer);
                 }
@@ -161,9 +163,10 @@ void Inspector::OnRender()
 
             for (size_t i = 0; i < sceneObjects.size(); i++)
             {
+                ImGui::PushID("ObjectHierarchy" + i);
                 const auto &obj = sceneObjects[i];
 
-                bool isSelected = (selectedObjectIndex == static_cast<int>(i));
+                bool isSelected = (Selection::selectedObjectIndex == static_cast<int>(i));
 
                 if (isSelected)
                 {
@@ -177,7 +180,7 @@ void Inspector::OnRender()
 
                 if (ImGui::Selectable(displayName.c_str(), isSelected, ImGuiSelectableFlags_AllowDoubleClick))
                 {
-                    selectedObjectIndex = static_cast<int>(i);
+                    Selection::selectedObjectIndex = static_cast<int>(i);
                 }
 
                 if (isSelected)
@@ -217,21 +220,22 @@ void Inspector::OnRender()
 
                     if (ImGui::MenuItem("Delete", "Del"))
                     {
-                        selectedObjectIndex = static_cast<int>(i);
+                        Selection::selectedObjectIndex = static_cast<int>(i);
                         ImGui::OpenPopup("DeleteConfirmPopup");
                     }
 
                     ImGui::EndPopup();
                 }
+                ImGui::PopID();
             }
 
             ImGui::EndChild();
 
-            if (selectedObjectIndex >= 0)
+            if (Selection::selectedObjectIndex >= 0)
             {
                 if (ImGui::Button("Clear Selection", ImVec2(-1, 0)))
                 {
-                    selectedObjectIndex = -1;
+                    Selection::selectedObjectIndex = -1;
                 }
             }
         }
@@ -244,9 +248,9 @@ void Inspector::OnRender()
 
     ImGui::Separator();
 
-    if (selectedObjectIndex >= 0 && selectedObjectIndex < static_cast<int>(sceneObjects.size()))
+    if (Selection::selectedObjectIndex >= 0 && Selection::selectedObjectIndex < static_cast<int>(sceneObjects.size()))
     {
-        const auto &selectedObj = sceneObjects[selectedObjectIndex];
+        const auto &selectedObj = sceneObjects[Selection::selectedObjectIndex];
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.9f, 0.4f, 1.0f));
         ImGui::Text("Selected: %s", selectedObj.name.c_str());
@@ -274,7 +278,7 @@ void Inspector::OnRender()
                 EntityObject objToDelete = selectedObj;
                 activeScene->DestroyEntityObject(objToDelete);
 
-                selectedObjectIndex = -1;
+                Selection::selectedObjectIndex = -1;
 
                 ImGui::CloseCurrentPopup();
             }
@@ -300,9 +304,45 @@ void Inspector::OnRender()
         {
             if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
             {
-                ImGui::DragFloat3("Position", &transform->position.x, 0.1f);
-                ImGui::DragFloat3("Rotation", &transform->rotation.x, 1.0f);
-                ImGui::DragFloat3("Scale", &transform->scale.x, 0.01f);
+                // Position
+                glm::vec3 pos = transform->GetPosition();
+                if (ImGui::DragFloat3("Position", &pos.x, 0.1f))
+                {
+                    transform->SetPosition(pos);
+                }
+
+                // Rotation (mostrar como Euler angles en grados)
+                glm::vec3 eulerDegrees = transform->GetEulerAnglesDegrees();
+                if (ImGui::DragFloat3("Rotation", &eulerDegrees.x, 1.0f))
+                {
+                    transform->SetRotationFromEulerDegrees(eulerDegrees);
+                }
+
+                // Scale
+                glm::vec3 scale = transform->GetScale();
+                if (ImGui::DragFloat3("Scale", &scale.x, 0.01f))
+                {
+                    transform->SetScale(scale);
+                }
+
+                // Información adicional (opcional)
+                if (ImGui::TreeNode("Advanced"))
+                {
+                    // Mostrar vectores direccionales (read-only)
+                    glm::vec3 forward = transform->GetForward();
+                    glm::vec3 right = transform->GetRight();
+                    glm::vec3 up = transform->GetUp();
+
+                    ImGui::Text("Forward: (%.2f, %.2f, %.2f)", forward.x, forward.y, forward.z);
+                    ImGui::Text("Right:   (%.2f, %.2f, %.2f)", right.x, right.y, right.z);
+                    ImGui::Text("Up:      (%.2f, %.2f, %.2f)", up.x, up.y, up.z);
+
+                    // Mostrar quaternion (read-only)
+                    glm::quat rot = transform->GetRotation();
+                    ImGui::Text("Quaternion: (%.2f, %.2f, %.2f, %.2f)", rot.w, rot.x, rot.y, rot.z);
+
+                    ImGui::TreePop();
+                }
             }
         }
         else

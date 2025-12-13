@@ -2,7 +2,14 @@
 
 #include <string>
 #include <vector>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <algorithm>
+
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/epsilon.hpp>
 
 // Forward declaration
 struct RenderableObject;
@@ -13,15 +20,363 @@ struct RenderableObject;
 
 struct Transform
 {
-    glm::vec3 position = glm::vec3(0.0f);
-    glm::vec3 rotation = glm::vec3(0.0f);
-    glm::vec3 scale = glm::vec3(1.0f);
+private:
+    glm::vec3 position_{0.0f};
+    glm::quat rotation_{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 scale_{1.0f};
 
+    Transform *parent_ = nullptr;
+    std::vector<Transform *> children_;
+
+    glm::mat4 localMatrix_{1.0f};
+    glm::mat4 worldMatrix_{1.0f};
+
+    bool dirty_ = true;
+
+    glm::vec3 QuaternionToEuler(const glm::quat &q) const
+    {
+        glm::vec3 angles;
+
+        float sinr_cosp = 2.0f * (q.w * q.x + q.y * q.z);
+        float cosr_cosp = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
+        angles.x = std::atan2(sinr_cosp, cosr_cosp);
+
+        float sinp = 2.0f * (q.w * q.y - q.z * q.x);
+        if (std::abs(sinp) >= 1.0f)
+            angles.y = std::copysign(glm::pi<float>() / 2.0f, sinp);
+        else
+            angles.y = std::asin(sinp);
+
+        float siny_cosp = 2.0f * (q.w * q.z + q.x * q.y);
+        float cosy_cosp = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+        angles.z = std::atan2(siny_cosp, cosy_cosp);
+
+        return angles;
+    }
+
+    glm::quat EulerToQuaternion(const glm::vec3 &euler) const
+    {
+        float cx = std::cos(euler.x * 0.5f);
+        float sx = std::sin(euler.x * 0.5f);
+        float cy = std::cos(euler.y * 0.5f);
+        float sy = std::sin(euler.y * 0.5f);
+        float cz = std::cos(euler.z * 0.5f);
+        float sz = std::sin(euler.z * 0.5f);
+
+        glm::quat q;
+        q.w = cx * cy * cz + sx * sy * sz;
+        q.x = sx * cy * cz - cx * sy * sz;
+        q.y = cx * sy * cz + sx * cy * sz;
+        q.z = cx * cy * sz - sx * sy * cz;
+
+        return glm::normalize(q);
+    }
+
+public:
     Transform() = default;
-    Transform(float x, float y, float z = 0.0f)
-        : position(x, y, z) {}
-    Transform(const glm::vec3 &pos)
-        : position(pos) {}
+    Transform(float x, float y, float z) : position_(x, y, z) {}
+    Transform(const glm::vec3 &pos) : position_(pos) {}
+
+    const glm::vec3 &GetPosition() const { return position_; }
+    const glm::quat &GetRotation() const { return rotation_; }
+    const glm::vec3 &GetScale() const { return scale_; }
+    const glm::mat4 &GetLocalMatrix() const { return localMatrix_; }
+    const glm::mat4 &GetWorldMatrix() const { return worldMatrix_; }
+    Transform *GetParent() const { return parent_; }
+    const std::vector<Transform *> &GetChildren() const { return children_; }
+    bool IsDirty() const { return dirty_; }
+
+    glm::vec3 GetEulerAngles() const
+    {
+        return QuaternionToEuler(rotation_);
+    }
+
+    glm::vec3 GetEulerAnglesDegrees() const
+    {
+        return glm::degrees(QuaternionToEuler(rotation_));
+    }
+
+    glm::vec3 GetForward() const
+    {
+        return glm::normalize(rotation_ * glm::vec3(0, 0, -1));
+    }
+
+    glm::vec3 GetRight() const
+    {
+        return glm::normalize(rotation_ * glm::vec3(1, 0, 0));
+    }
+
+    glm::vec3 GetUp() const
+    {
+        return glm::normalize(rotation_ * glm::vec3(0, 1, 0));
+    }
+
+    void SetPosition(const glm::vec3 &pos)
+    {
+        if (position_ != pos)
+        {
+            position_ = pos;
+            MarkDirty();
+        }
+    }
+
+    void SetPosition(float x, float y, float z)
+    {
+        SetPosition(glm::vec3(x, y, z));
+    }
+
+    void SetRotation(const glm::quat &rot)
+    {
+        rotation_ = glm::normalize(rot);
+        MarkDirty();
+    }
+
+    void SetRotationFromEuler(const glm::vec3 &eulerAngles)
+    {
+        rotation_ = EulerToQuaternion(eulerAngles);
+        MarkDirty();
+    }
+
+    void SetRotationFromEuler(float x, float y, float z)
+    {
+        SetRotationFromEuler(glm::vec3(x, y, z));
+    }
+
+    void SetRotationFromEulerDegrees(const glm::vec3 &eulerDegrees)
+    {
+        SetRotationFromEuler(glm::radians(eulerDegrees));
+    }
+
+    void SetRotationFromEulerDegrees(float x, float y, float z)
+    {
+        SetRotationFromEulerDegrees(glm::vec3(x, y, z));
+    }
+
+    void SetRotationFromAxisAngle(const glm::vec3 &axis, float angleRadians)
+    {
+        rotation_ = glm::angleAxis(angleRadians, glm::normalize(axis));
+        MarkDirty();
+    }
+
+    void LookAt(const glm::vec3 &target, const glm::vec3 &up = glm::vec3(0, 1, 0))
+    {
+        glm::vec3 direction = glm::normalize(target - position_);
+        rotation_ = glm::quatLookAt(direction, up);
+        MarkDirty();
+    }
+
+    void SetScale(const glm::vec3 &s)
+    {
+        if (scale_ != s)
+        {
+            scale_ = s;
+            MarkDirty();
+        }
+    }
+
+    void SetScale(float x, float y, float z)
+    {
+        SetScale(glm::vec3(x, y, z));
+    }
+
+    void SetScale(float uniformScale)
+    {
+        SetScale(glm::vec3(uniformScale));
+    }
+
+    void Translate(const glm::vec3 &offset)
+    {
+        position_ += offset;
+        MarkDirty();
+    }
+
+    void Rotate(const glm::quat &rotation)
+    {
+        rotation_ = glm::normalize(rotation * rotation_);
+        MarkDirty();
+    }
+
+    void RotateEuler(const glm::vec3 &eulerAngles)
+    {
+        Rotate(EulerToQuaternion(eulerAngles));
+    }
+
+    void RotateEuler(float x, float y, float z)
+    {
+        RotateEuler(glm::vec3(x, y, z));
+    }
+
+    void RotateAxisAngle(const glm::vec3 &axis, float angleRadians)
+    {
+        Rotate(glm::angleAxis(angleRadians, glm::normalize(axis)));
+    }
+
+    void RotateAroundAxis(const glm::vec3 &axis, float angleRadians)
+    {
+        glm::vec3 worldAxis = rotation_ * glm::normalize(axis);
+        RotateAxisAngle(worldAxis, angleRadians);
+    }
+
+    void RotateX(float angleRadians)
+    {
+        glm::quat rotX = glm::angleAxis(angleRadians, glm::vec3(1, 0, 0));
+        rotation_ = rotX * rotation_;
+        MarkDirty();
+    }
+
+    void RotateY(float angleRadians)
+    {
+        glm::quat rotY = glm::angleAxis(angleRadians, glm::vec3(0, 1, 0));
+        rotation_ = rotY * rotation_;
+        MarkDirty();
+    }
+
+    void RotateZ(float angleRadians)
+    {
+        glm::quat rotZ = glm::angleAxis(angleRadians, glm::vec3(0, 0, 1));
+        rotation_ = rotZ * rotation_;
+        MarkDirty();
+    }
+
+    void RotateXDegrees(float angleDegrees)
+    {
+        RotateX(glm::radians(angleDegrees));
+    }
+
+    void RotateYDegrees(float angleDegrees)
+    {
+        RotateY(glm::radians(angleDegrees));
+    }
+
+    void RotateZDegrees(float angleDegrees)
+    {
+        RotateZ(glm::radians(angleDegrees));
+    }
+
+    void RotateLocal(const glm::vec3 &axis, float angleRadians)
+    {
+        glm::vec3 localAxis = glm::normalize(axis);
+        glm::quat localRot = glm::angleAxis(angleRadians, localAxis);
+        rotation_ = rotation_ * localRot;
+        MarkDirty();
+    }
+
+    void RotateWorld(const glm::vec3 &axis, float angleRadians)
+    {
+        glm::vec3 worldAxis = glm::normalize(axis);
+        glm::quat worldRot = glm::angleAxis(angleRadians, worldAxis);
+        rotation_ = worldRot * rotation_;
+        MarkDirty();
+    }
+
+    void ScaleBy(const glm::vec3 &factor)
+    {
+        scale_ *= factor;
+        MarkDirty();
+    }
+
+    void ScaleBy(float uniformFactor)
+    {
+        scale_ *= uniformFactor;
+        MarkDirty();
+    }
+
+    void UpdateLocalMatrix()
+    {
+        glm::mat4 translation = glm::translate(glm::mat4(1.0f), position_);
+        glm::mat4 rotation = glm::mat4_cast(rotation_);
+        glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), scale_);
+
+        localMatrix_ = translation * rotation * scaleMatrix;
+    }
+
+    void UpdateWorldMatrix()
+    {
+        if (dirty_)
+        {
+            UpdateLocalMatrix();
+
+            if (parent_)
+            {
+                worldMatrix_ = parent_->worldMatrix_ * localMatrix_;
+            }
+            else
+            {
+                worldMatrix_ = localMatrix_;
+            }
+
+            dirty_ = false;
+        }
+
+        for (Transform *child : children_)
+        {
+            child->UpdateWorldMatrix();
+        }
+    }
+
+    glm::vec3 GetWorldPosition() const
+    {
+        return glm::vec3(worldMatrix_[3]);
+    }
+
+    glm::quat GetWorldRotation() const
+    {
+        if (!parent_)
+            return rotation_;
+
+        return parent_->GetWorldRotation() * rotation_;
+    }
+
+    glm::vec3 GetWorldScale() const
+    {
+        glm::vec3 worldScale = scale_;
+        Transform *p = parent_;
+        while (p)
+        {
+            worldScale *= p->scale_;
+            p = p->parent_;
+        }
+        return worldScale;
+    }
+
+    void AttachChild(Transform *child)
+    {
+        if (!child || child == this)
+            return;
+
+        if (child->parent_)
+            child->parent_->DetachChild(child);
+
+        child->parent_ = this;
+        children_.push_back(child);
+        child->MarkDirty();
+    }
+
+    void DetachChild(Transform *child)
+    {
+        auto it = std::find(children_.begin(), children_.end(), child);
+        if (it != children_.end())
+        {
+            (*it)->parent_ = nullptr;
+            children_.erase(it);
+            (*it)->MarkDirty();
+        }
+    }
+
+    void DetachFromParent()
+    {
+        if (parent_)
+            parent_->DetachChild(this);
+    }
+
+    void MarkDirty()
+    {
+        dirty_ = true;
+        for (Transform *child : children_)
+        {
+            child->MarkDirty();
+        }
+    }
 };
 
 struct Velocity

@@ -38,9 +38,7 @@ RenderableObject *ModelManager::CreateModelFromFile(
     auto material = m_gfx->CreateMaterial(shader);
 
     auto obj = std::make_unique<RenderableObject>();
-    obj->position = glm::vec3(0.0f);
-    obj->rotation = glm::vec3(0.0f);
-    obj->scale = glm::vec3(1.0f);
+    obj->modelMatrix = glm::mat4(1.0f);
     obj->material = material;
     obj->renderObj = Mantrax::RenderObject(mesh, material);
     obj->name = name;
@@ -145,9 +143,7 @@ RenderableObject *ModelManager::CreateModelOnly(
     auto mesh = m_gfx->CreateMesh(vertices, indices);
 
     auto obj = std::make_unique<RenderableObject>();
-    obj->position = glm::vec3(0.0f);
-    obj->rotation = glm::vec3(0.0f);
-    obj->scale = glm::vec3(1.0f);
+    obj->modelMatrix = glm::mat4(1.0f);
     obj->material = nullptr;
     obj->renderObj.mesh = mesh;
     obj->renderObj.material = nullptr;

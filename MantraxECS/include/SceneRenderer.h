@@ -1,17 +1,20 @@
 #pragma once
 #include "../../MantraxRender/include/MantraxGFX_API.h"
-#include "../../MantraxEditor/includes/FPSCamera.h"
+#include "FPSCamera.h"
 #include "IService.h"
 #include "ModelManager.h"
 #include <vector>
 #include <memory>
 #include "EngineLoaderDLL.h"
+#include <glm/glm.hpp>
 
 class MANTRAX_API SceneRenderer : public IService
 {
 public:
     SceneRenderer(Mantrax::GFX *gfx);
     ~SceneRenderer();
+
+    Mantrax::FPSCamera *camera;
 
     std::string getName() override { return "SceneRenderer"; }
 
@@ -23,9 +26,7 @@ public:
     // Actualizar transformaciones de un objeto
     void UpdateObjectTransform(
         RenderableObject *obj,
-        const glm::vec3 &position,
-        const glm::vec3 &rotation,
-        const glm::vec3 &scale);
+        const glm::mat4 &modelMatrix);
 
     // Actualizar UBOs con la cámara actual
     void UpdateUBOs(Mantrax::FPSCamera *camera);
