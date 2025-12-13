@@ -809,7 +809,7 @@ namespace Mantrax
     {
         if (!obj.mesh || !obj.material)
         {
-            throw std::runtime_error("RenderObject debe tener mesh y material válidos");
+            throw std::runtime_error("RenderObject debe tener mesh y material válidos (no safe)");
         }
 
         // Si el mesh no tiene descriptor set, crearlo

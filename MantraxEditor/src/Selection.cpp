@@ -1,3 +1,4 @@
 #include "../includes/Selection.h"
 
-int Selection::selectedObjectIndex = -1;
+EntityObject *Selection::objectSelected = nullptr;
+bool Selection::hasSelection = false;

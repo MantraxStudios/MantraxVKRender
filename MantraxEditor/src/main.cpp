@@ -18,6 +18,7 @@
 #include "../includes/UIRender.h"
 #include "../includes/ui/SceneView.h"
 #include "../includes/ui/Inspector.h"
+#include "../includes/ui/Hierarchy.h"
 #include "../includes/ui/MenuBar.h"
 #include "../includes/ImGuiManager.h"
 #include <iostream>
@@ -396,6 +397,7 @@ int main()
         uiRender->Set(new MenuBar());
 
         uiRender->Set(new Inspector());
+        uiRender->Set(new Hierarchy());
         uiRender->GetByType<SceneView>()->renderID = offscreen->renderID;
 
         Mantrax::Timer gameTimer;

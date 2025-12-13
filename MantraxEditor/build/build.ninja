@@ -159,6 +159,16 @@ build CMakeFiles/MantraxEditor.dir/src/main.cpp.obj: CXX_COMPILER__MantraxEditor
   TARGET_COMPILE_PDB = CMakeFiles\MantraxEditor.dir\
   TARGET_PDB = MantraxEditor.pdb
 
+build CMakeFiles/MantraxEditor.dir/src/ui/Hierarchy.cpp.obj: CXX_COMPILER__MantraxEditor_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/src/ui/Hierarchy.cpp || cmake_object_order_depends_target_MantraxEditor
+  CONFIG = Debug
+  DEP_FILE = CMakeFiles\MantraxEditor.dir\src\ui\Hierarchy.cpp.obj.d
+  FLAGS = -O0 -g -Xclang -gcodeview -std=gnu++17 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
+  INCLUDES = -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxRender/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxAddons/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxECS/include -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxECS/include/lua -IC:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/includes
+  OBJECT_DIR = CMakeFiles\MantraxEditor.dir
+  OBJECT_FILE_DIR = CMakeFiles\MantraxEditor.dir\src\ui
+  TARGET_COMPILE_PDB = CMakeFiles\MantraxEditor.dir\
+  TARGET_PDB = MantraxEditor.pdb
+
 build CMakeFiles/MantraxEditor.dir/src/ui/Inspector.cpp.obj: CXX_COMPILER__MantraxEditor_unscanned_Debug C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/src/ui/Inspector.cpp || cmake_object_order_depends_target_MantraxEditor
   CONFIG = Debug
   DEP_FILE = CMakeFiles\MantraxEditor.dir\src\ui\Inspector.cpp.obj.d
@@ -197,7 +207,7 @@ build CMakeFiles/MantraxEditor.dir/src/ui/SceneView.cpp.obj: CXX_COMPILER__Mantr
 #############################################
 # Link the executable MantraxEditor.exe
 
-build MantraxEditor.exe: CXX_EXECUTABLE_LINKER__MantraxEditor_Debug CMakeFiles/MantraxEditor.dir/includes/imgui/ImGuizmo.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_demo.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_draw.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_impl_vulkan.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_impl_win32.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_tables.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_widgets.cpp.obj CMakeFiles/MantraxEditor.dir/src/EngineLoader.cpp.obj CMakeFiles/MantraxEditor.dir/src/Selection.cpp.obj CMakeFiles/MantraxEditor.dir/src/main.cpp.obj CMakeFiles/MantraxEditor.dir/src/ui/Inspector.cpp.obj CMakeFiles/MantraxEditor.dir/src/ui/MenuBar.cpp.obj CMakeFiles/MantraxEditor.dir/src/ui/SceneView.cpp.obj | C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxWrapper/build/Mantrax.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxRender/libs/vulkan-1.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxAddons/libs/assimp-vc143-mt.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxECS/libs/lua-5.4.4.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxECS/libs/lua54.lib
+build MantraxEditor.exe: CXX_EXECUTABLE_LINKER__MantraxEditor_Debug CMakeFiles/MantraxEditor.dir/includes/imgui/ImGuizmo.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_demo.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_draw.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_impl_vulkan.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_impl_win32.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_tables.cpp.obj CMakeFiles/MantraxEditor.dir/includes/imgui/imgui_widgets.cpp.obj CMakeFiles/MantraxEditor.dir/src/EngineLoader.cpp.obj CMakeFiles/MantraxEditor.dir/src/Selection.cpp.obj CMakeFiles/MantraxEditor.dir/src/main.cpp.obj CMakeFiles/MantraxEditor.dir/src/ui/Hierarchy.cpp.obj CMakeFiles/MantraxEditor.dir/src/ui/Inspector.cpp.obj CMakeFiles/MantraxEditor.dir/src/ui/MenuBar.cpp.obj CMakeFiles/MantraxEditor.dir/src/ui/SceneView.cpp.obj | C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxWrapper/build/Mantrax.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxRender/libs/vulkan-1.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxAddons/libs/assimp-vc143-mt.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxECS/libs/lua-5.4.4.lib C$:/Users/tupap/Desktop/MantraxVKRender/MantraxEditor/../MantraxECS/libs/lua54.lib
   CONFIG = Debug
   FLAGS = -O0 -g -Xclang -gcodeview -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd
   LINK_FLAGS = -Xlinker /subsystem:windows -fuse-ld=lld-link
