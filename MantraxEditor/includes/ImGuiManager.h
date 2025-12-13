@@ -38,21 +38,21 @@ namespace Mantrax
                             ImGuiWindowFlags_NoBringToFrontOnFocus |
                             ImGuiWindowFlags_NoNavFocus;
 
-            // const ImGuiViewport *viewport = ImGui::GetMainViewport();
-            // ImGui::SetNextWindowPos(viewport->WorkPos);
-            // ImGui::SetNextWindowSize(viewport->WorkSize);
-            // ImGui::SetNextWindowViewport(viewport->ID);
+            const ImGuiViewport *viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(viewport->WorkPos);
+            ImGui::SetNextWindowSize(viewport->WorkSize);
+            ImGui::SetNextWindowViewport(viewport->ID);
 
-            // ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-            // ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-            // ImGui::Begin("MainDockspace", nullptr, window_flags);
-            // ImGui::PopStyleVar(2);
+            ImGui::Begin("MainDockspace", nullptr, window_flags);
+            ImGui::PopStyleVar(2);
 
-            // ImGuiID dockspace_id = ImGui::GetID("MyDockspace");
-            // ImGui::DockSpace(dockspace_id);
+            ImGuiID dockspace_id = ImGui::GetID("MyDockspace");
+            ImGui::DockSpace(dockspace_id);
 
-            // ImGui::End();
+            ImGui::End();
 
             SetupStyle();
         }

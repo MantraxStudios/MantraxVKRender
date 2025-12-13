@@ -102,7 +102,6 @@ namespace Mantrax
         VkBuffer indexBuffer = VK_NULL_HANDLE;
         VkDeviceMemory indexBufferMemory = VK_NULL_HANDLE;
 
-        // ✅ AÑADIR: UBO y buffers para transformación
         UniformBufferObject ubo{};
         VkBuffer uniformBuffer = VK_NULL_HANDLE;
         VkDeviceMemory uniformBufferMemory = VK_NULL_HANDLE;
@@ -157,7 +156,7 @@ namespace Mantrax
 
     struct MANTRAX_API MaterialPushConstants
     {
-        float baseColorFactor[4] = {1.0f, 1.0f, 1.0f, 1.0f}; // RGB + unused
+        float baseColorFactor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
         float metallicFactor = 1.0f;
         float roughnessFactor = 0.3f;
         float normalScale = 1.0f;
@@ -168,7 +167,6 @@ namespace Mantrax
         int32_t useAOMap = 0;
     };
 
-    // Conjunto de texturas PBR
     struct MANTRAX_API PBRTextures
     {
         std::shared_ptr<Texture> albedo;
@@ -178,27 +176,18 @@ namespace Mantrax
         std::shared_ptr<Texture> ao;
     };
 
-    // Actualizar la clase Material
     class MANTRAX_API Material
     {
     public:
         std::shared_ptr<Shader> shader;
 
-        // UniformBufferObject ubo{};
-        // VkBuffer uniformBuffer = VK_NULL_HANDLE;
-        // VkDeviceMemory uniformBufferMemory = VK_NULL_HANDLE;
-        // VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
-
-        // Texturas PBR
         PBRTextures pbrTextures;
 
-        // Push constants para propiedades del material
         MaterialPushConstants pushConstants;
 
         Material() = default;
         Material(std::shared_ptr<Shader> shdr) : shader(shdr) {}
 
-        // Helper methods
         void SetAlbedoTexture(std::shared_ptr<Texture> tex)
         {
             pbrTextures.albedo = tex;
@@ -306,14 +295,12 @@ namespace Mantrax
         };
 
         std::vector<AttachmentConfig> attachments;
-        std::string name; // Para debug/identificación
+        std::string name;
 
-        // Configuración de subpass
         std::vector<uint32_t> colorAttachmentIndices;
         int32_t depthAttachmentIndex = -1;
     };
 
-    // NUEVA: Clase para manejar un render pass y sus framebuffers asociados
     class MANTRAX_API RenderPassObject
     {
     public:
@@ -345,13 +332,10 @@ namespace Mantrax
 
         std::shared_ptr<Texture> CreateDefaultWhiteTexture();
 
-        // Crear textura normal por defecto (normal apuntando hacia arriba)
         std::shared_ptr<Texture> CreateDefaultNormalTexture();
 
-        // Actualizar descriptor set con todas las texturas PBR
         void UpdatePBRDescriptorSet(std::shared_ptr<Material> material);
 
-        // Función pública para asignar texturas PBR a un material
         void SetMaterialPBRTextures(std::shared_ptr<Material> material,
                                     std::shared_ptr<Texture> albedo = nullptr,
                                     std::shared_ptr<Texture> normal = nullptr,
@@ -383,13 +367,11 @@ namespace Mantrax
                                             uint32_t framebufferIndex,
                                             const std::vector<VkClearValue> &clearValues);
 
-        // Dibujar con un render pass específico
         void DrawFrameWithRenderPass(std::shared_ptr<RenderPassObject> renderPassObj,
                                      const std::vector<RenderObject> &objects,
                                      const std::vector<VkClearValue> &clearValues,
                                      std::function<void(VkCommandBuffer)> additionalCommands = nullptr);
 
-        // Limpiar render passes personalizados
         void CleanupCustomRenderPasses();
 
         void AddRenderObject(const RenderObject &obj);
@@ -420,7 +402,6 @@ namespace Mantrax
         VkFormat GetDepthFormat() const { return m_DepthFormat; }
         VkImageView GetDepthImageView() const { return m_DepthImageView; }
 
-        // Getters adicionales para rendering manual
         VkSwapchainKHR GetSwapchain() const { return m_Swapchain; }
         const VkSemaphore &GetImageAvailableSemaphoreRef() const { return m_ImageAvailableSemaphore; }
         const VkSemaphore &GetRenderFinishedSemaphoreRef() const { return m_RenderFinishedSemaphore; }
@@ -516,7 +497,6 @@ namespace Mantrax
         void CreateShaderPipeline(std::shared_ptr<Shader> shader, VkRenderPass renderPass = VK_NULL_HANDLE);
         void CreateVertexBuffer(std::shared_ptr<Mesh> mesh);
         void CreateIndexBuffer(std::shared_ptr<Mesh> mesh);
-        // void CreateUniformBuffer(std::shared_ptr<Material> material);
         void CreateUniformBuffer(std::shared_ptr<Mesh> mesh);
         void CreateDescriptorSet(std::shared_ptr<Mesh> mesh, std::shared_ptr<Material> material);
         void CreateDescriptorSet(std::shared_ptr<Material> material);
